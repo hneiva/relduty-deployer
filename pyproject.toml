@@ -1,0 +1,65 @@
+[project]
+name = "relduty-deployer"
+version = "0.1.0"
+description = "Deploy Mozilla Release Engineering projects to staging and production"
+license = "MPL-2.0"
+readme = "README.md"
+authors = [
+    { name = "Mozilla Release Engineering", email = "release+python@mozilla.com" }
+]
+requires-python = ">=3.11"
+keywords = ["releng", "releaseduty", "deploy"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Mozilla Public License 2.0 (MPL 2.0)",
+    "Natural Language :: English",
+]
+dependencies = [
+    "click",
+    "httpx",
+    "textual",
+]
+
+[project.scripts]
+relduty-deployer = "relduty_deployer.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "pytest-cov",
+    "ruff",
+    "tox",
+    "tox-uv",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build]
+include = ["src/**/*"]
+
+[tool.hatch.build.targets.wheel.sources]
+"src/" = ""
+
+[tool.ruff]
+line-length = 160
+target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle
+    "F",    # pyflakes
+    "I",    # isort
+]
+fixable = ["ALL"]
+
+# Allow unused variables when underscore-prefixed.
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

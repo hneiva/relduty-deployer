@@ -4,11 +4,12 @@ A terminal dashboard for the Mozilla Release Engineering deploy rotation. It fet
 RelEng project it knows about, shows how far each environment is behind, and performs the
 fast-forward push that deploys it.
 
-RelEng stages deployments every other Tuesday and pushes them to production every other
-Thursday. Doing that by hand means remembering that five repositories have three different
+RelEng stages deployments every Tuesday and pushes them to production every Thursday.
+Doing that by hand means remembering that five repositories have three different
 source branches and two different names for "staging", and fetching each one before you can
 tell whether there is anything to deploy at all.
 
+For example:
 ```
  project                 staging                             prod
  scriptworker-scripts    15 commits behind                   3 commits behind
@@ -23,7 +24,7 @@ tell whether there is anything to deploy at all.
 ```bash
 uv sync
 uv run relduty-deployer            # the dashboard
-uv run relduty-deployer status     # the same numbers, printed and scriptable
+uv run relduty-deployer status     # the same numbers, printed and somewhat scriptable
 uv run relduty-deployer status --no-fetch
 ```
 
@@ -44,12 +45,7 @@ nothing watches, which looks like success and deploys nothing.
 | tooltool | `master` | **`staging`** | `production` | branch push |
 | balrog | `main` | GitHub release | ArgoCD | balrog (status only) |
 
-Two of these are easy to get wrong. tooltool stages from `staging`, not `dev` — its `dev`
-branch was last touched in 2020 and is no longer in its branch gate. k8s-autoscale deploys
-from `main`; its `master` branch is over a hundred commits behind and is not in its branch
-gate either, so `origin/HEAD` in a local clone points at the wrong place.
-
-Only the plain `dev` and `production` branches are offered for scriptworker-scripts. Its
+Note: Only the plain `dev` and `production` branches are offered for scriptworker-scripts. Its
 per-script `dev-<script>` and `production-<script>` branches remain a manual escape hatch.
 
 ## What the colours mean
@@ -66,7 +62,7 @@ per-script `dev-<script>` and `production-<script>` branches remain a manual esc
 
 The tool only ever fast-forwards, and `--force` is never passed on any code path. If a
 deploy branch has commits its source branch does not, the button turns red and cannot be
-pressed — resolve that by hand.
+pressed - resolving it by hand is the intended resolution.
 
 Four independent things have to agree before a push happens: classification marks only a
 pure fast-forward as pushable, the button is disabled otherwise, the status is re-checked
@@ -80,8 +76,7 @@ initial focus so a stray Enter cannot deploy production.
 Two further traps are checked rather than assumed. The remote must point at the canonical
 `mozilla-releng` repository, because a push to a personal fork succeeds and deploys
 nothing. And the push sends a resolved sha rather than a branch name, so what ships is
-exactly what the status was measured from — a local branch can be an entire release behind
-its remote-tracking ref.
+exactly what the status was measured from, and not from local refs.
 
 ### Rolling back
 

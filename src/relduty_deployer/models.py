@@ -72,11 +72,19 @@ class DeployStatus:
     ahead: int = 0
     action: ActionKind = ActionKind.NONE
     detail: str = ""
+    tooltip: str = ""
     url: str = ""
     error: str = ""
 
     @classmethod
-    def from_counts(cls, counts: AheadBehind, *, action: ActionKind | None = None, detail: str = "") -> DeployStatus:
+    def from_counts(
+        cls,
+        counts: AheadBehind,
+        *,
+        action: ActionKind | None = None,
+        detail: str = "",
+        tooltip: str = "",
+    ) -> DeployStatus:
         """Classify divergence counts.
 
         This is the only place the two counts become a verdict, so callers cannot
@@ -98,6 +106,7 @@ class DeployStatus:
             ahead=counts.ahead,
             action=default_action if action is None else action,
             detail=detail,
+            tooltip=tooltip,
         )
 
     @classmethod

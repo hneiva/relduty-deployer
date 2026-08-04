@@ -55,7 +55,7 @@ async def run(argv: Sequence[str], *, timeout: float, env: Mapping[str, str] | N
 
     try:
         stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
-    except (TimeoutError, asyncio.TimeoutError):
+    except TimeoutError:
         process.kill()
         await process.wait()
         raise CommandError(f"timed out after {timeout:g}s: {shlex.join(argv)}") from None

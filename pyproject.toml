@@ -7,7 +7,7 @@ readme = "README.md"
 authors = [
     { name = "Mozilla Release Engineering", email = "release+python@mozilla.com" }
 ]
-requires-python = ">=3.11"
+requires-python = ">=3.14"
 keywords = ["releng", "releaseduty", "deploy"]
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -47,7 +47,7 @@ include = ["src/**/*"]
 
 [tool.ruff]
 line-length = 160
-target-version = "py311"
+target-version = "py314"
 
 [tool.ruff.lint]
 select = [

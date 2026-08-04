@@ -135,7 +135,7 @@ against the file rather than a flag.
 ```bash
 uv run pytest
 uv run ruff check . && uv run ruff format --check .
-uv run tox -e py311,check
+uv run tox -e py314,check
 pre-commit install
 ```
 

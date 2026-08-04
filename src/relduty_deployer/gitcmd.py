@@ -1,8 +1,8 @@
 """Running git.
 
-This is the only module in the package that spawns a subprocess. The argv builders are
-pure functions so that the exact command shape can be asserted in tests without running
-anything, which is what protects the ahead/behind comparison from being inverted.
+The argv builders are pure functions so that the exact command shape can be asserted in
+tests without running anything, which is what protects the ahead/behind comparison from
+being inverted.
 """
 
 from __future__ import annotations
@@ -17,6 +17,7 @@ from types import MappingProxyType
 from typing import Protocol
 
 from relduty_deployer.models import AheadBehind, DeployResult
+from relduty_deployer.process import CommandError, CommandOutput, run
 
 DEFAULT_TIMEOUT = 20.0
 DEFAULT_FETCH_TIMEOUT = 120.0
@@ -33,20 +34,6 @@ class FetchSpec:
 
     tags: bool = False
     prune: bool = False
-
-
-@dataclass(frozen=True)
-class GitOutput:
-    """The raw result of one git invocation."""
-
-    returncode: int
-    stdout: str
-    stderr: str
-
-    @property
-    def combined(self) -> str:
-        """Both streams, for showing the user what git said."""
-        return "\n".join(part for part in (self.stdout.strip(), self.stderr.strip()) if part)
 
 
 def rev_list_count_argv(path: Path, *, target_ref: str, source_ref: str) -> tuple[str, ...]:
@@ -183,36 +170,17 @@ class SubprocessGitClient:
         self._fetch_timeout = fetch_timeout
         self._fetch_semaphore = asyncio.Semaphore(max_concurrent_fetches)
 
-    async def _run(self, argv: Sequence[str], *, timeout: float) -> GitOutput:
+    async def _run(self, argv: Sequence[str], *, timeout: float) -> CommandOutput:
         """Run git and capture both streams. Does not raise on a non-zero exit."""
         try:
-            process = await asyncio.create_subprocess_exec(
-                *argv,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                stdin=asyncio.subprocess.DEVNULL,
-                env=_child_env(),
-            )
-        except OSError as exc:
-            raise GitError(f"could not run {shlex.join(argv)}: {exc}") from exc
-
-        try:
-            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
-        except (TimeoutError, asyncio.TimeoutError):
-            process.kill()
-            await process.wait()
-            raise GitError(f"timed out after {timeout:g}s: {shlex.join(argv)}") from None
-
-        return GitOutput(
-            returncode=process.returncode if process.returncode is not None else -1,
-            stdout=stdout.decode(errors="replace"),
-            stderr=stderr.decode(errors="replace"),
-        )
+            return await run(argv, timeout=timeout, env=_child_env())
+        except CommandError as exc:
+            raise GitError(str(exc)) from exc
 
     async def _checked(self, argv: Sequence[str], *, timeout: float | None = None) -> str:
         """Run git and return stdout, raising `GitError` if it failed."""
         result = await self._run(argv, timeout=self._timeout if timeout is None else timeout)
-        if result.returncode != 0:
+        if not result.ok:
             raise GitError(f"exit {result.returncode}: {shlex.join(argv)}\n{result.combined}")
         return result.stdout
 
@@ -241,7 +209,7 @@ class SubprocessGitClient:
     async def has_commit(self, path: Path, rev: str) -> bool:
         """Whether `rev` names a commit that exists in this clone."""
         result = await self._run(("git", "-C", str(path), "cat-file", "-e", f"{rev}^{{commit}}"), timeout=self._timeout)
-        return result.returncode == 0
+        return result.ok
 
     async def show_file(self, path: Path, ref: str, file: str) -> str:
         """Read a file as it exists at `ref`, never from the working tree."""
@@ -269,7 +237,7 @@ class SubprocessGitClient:
         except GitError as exc:
             return DeployResult(ok=False, output=str(exc), argv=argv, dry_run=dry_run)
         return DeployResult(
-            ok=result.returncode == 0,
+            ok=result.ok,
             output=result.combined or "(git printed nothing)",
             argv=argv,
             dry_run=dry_run,

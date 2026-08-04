@@ -120,9 +120,9 @@ class DeployStatus:
         return cls(kind=StatusKind.ERROR, error=message, detail=message)
 
     @classmethod
-    def unimplemented(cls, detail: str = "") -> DeployStatus:
-        """Status for an environment this tool deliberately does not automate."""
-        return cls(kind=StatusKind.NOT_IMPLEMENTED, detail=detail)
+    def unimplemented(cls, detail: str = "", tooltip: str = "") -> DeployStatus:
+        """Status for an environment whose state this tool cannot determine."""
+        return cls(kind=StatusKind.NOT_IMPLEMENTED, detail=detail, tooltip=tooltip or detail)
 
     @property
     def summary(self) -> str:
@@ -152,9 +152,15 @@ class DeployStatus:
             # Balrog's up-to-date states carry the version that is live.
             return f"{self.detail} · Up to date"
         if self.detail and self.kind in (StatusKind.BEHIND, StatusKind.DIVERGED):
+            # A count of zero means it could not be measured, so show only the detail
+            # rather than an unhelpful "0 behind".
+            if self.kind is StatusKind.BEHIND and self.behind == 0:
+                return self.detail
             return f"{self.detail} · {self.summary}"
         if self.kind is StatusKind.BEHIND:
             return f"{_plural(self.behind, 'commit')} behind"
+        if self.kind is StatusKind.NOT_IMPLEMENTED and self.detail:
+            return self.detail
         return self.summary
 
     @property

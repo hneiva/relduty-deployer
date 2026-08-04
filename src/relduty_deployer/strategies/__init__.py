@@ -6,7 +6,9 @@ from collections.abc import Mapping
 from types import MappingProxyType
 
 from relduty_deployer.gitcmd import GitClient
+from relduty_deployer.github import GitHubClient
 from relduty_deployer.projects import Project
+from relduty_deployer.strategies.balrog import BalrogStrategy
 from relduty_deployer.strategies.base import (
     Strategy,
     StrategyError,
@@ -15,8 +17,10 @@ from relduty_deployer.strategies.base import (
     WrongRemoteError,
 )
 from relduty_deployer.strategies.branch_push import BranchPushStrategy
+from relduty_deployer.versions import VersionProbe
 
 __all__ = [
+    "BalrogStrategy",
     "BranchPushStrategy",
     "Strategy",
     "StrategyError",
@@ -28,14 +32,17 @@ __all__ = [
 ]
 
 
-def build_strategies(*, git: GitClient) -> Mapping[str, Strategy]:
+def build_strategies(*, git: GitClient, github: GitHubClient, versions: VersionProbe) -> Mapping[str, Strategy]:
     """Construct the strategy registry.
 
     Built once in the composition root and passed down. Deliberately not a module-level
     mutable dict registered into at import time: that would make import order
     load-bearing and leave tests unable to substitute fakes.
     """
-    implementations: tuple[Strategy, ...] = (BranchPushStrategy(git=git),)
+    implementations: tuple[Strategy, ...] = (
+        BranchPushStrategy(git=git),
+        BalrogStrategy(git=git, github=github, versions=versions),
+    )
     return MappingProxyType({implementation.name: implementation for implementation in implementations})
 
 

@@ -22,7 +22,7 @@ SCRIPTWORKER_STAGING_WARNING = (
     "to scriptworkers."
 )
 
-BALROG_DOCS_URL = "https://mozilla-balrog.readthedocs.io/en/latest/infrastructure.html#deploying-to-stage"
+BALROG_DOCS_URL = "https://mozilla-balrog.readthedocs.io/en/latest/infrastructure.html"
 
 
 @dataclass(frozen=True)

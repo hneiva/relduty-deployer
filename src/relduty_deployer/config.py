@@ -1,3 +1,7 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 """Machine-local settings, cached in ~/.config/relduty-deployer-config.json.
 
 Only things that differ between machines belong here: where each checkout lives, which

@@ -3,9 +3,11 @@ name = "relduty-deployer"
 version = "0.1.0"
 description = "Deploy Mozilla Release Engineering projects to staging and production"
 license = "MPL-2.0"
+license-files = ["LICENSE"]
 readme = "README.md"
 authors = [
-    { name = "Mozilla Release Engineering", email = "release+python@mozilla.com" }
+    { name = "Mozilla Release Engineering", email = "release+python@mozilla.com" },
+    { name = "Heitor Neiva", email = "hneiva@mozilla.com" },
 ]
 requires-python = ">=3.14"
 keywords = ["releng", "releaseduty", "deploy"]
@@ -13,7 +15,6 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: Mozilla Public License 2.0 (MPL 2.0)",
     "Natural Language :: English",
 ]
 dependencies = [

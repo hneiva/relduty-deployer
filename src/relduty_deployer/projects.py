@@ -1,3 +1,7 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 """The projects this tool deploys, and how each one is deployed.
 
 Everything here is a fact about the project rather than a preference, so it lives in

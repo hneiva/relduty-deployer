@@ -1,3 +1,7 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 """Command shapes, and one real repository to prove the orientation is right.
 
 The argv assertions are the regression net for the single most dangerous bug in this

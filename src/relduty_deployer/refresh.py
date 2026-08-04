@@ -1,3 +1,7 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 """Bringing one project up to date and reading the state of its environments.
 
 Shared by the terminal UI and the `status` command so that both report identically.

@@ -1,3 +1,7 @@
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 """The gh adapter, with the subprocess replaced.
 
 The distinction that matters here is "no release for that tag", which is a real answer, from

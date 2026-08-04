@@ -142,3 +142,9 @@ The one test worth knowing about is in `tests/test_gitcmd.py`: it builds a real 
 whose deploy branch is 2 commits behind and 1 commit ahead, and asserts which number is
 which. Transposing ahead and behind would make the tool offer a push at precisely the
 moment it must refuse one, and unequal counts are what make that transposition detectable.
+
+## License
+
+This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. If a
+copy of the MPL was not distributed with this file, You can obtain one at
+<https://mozilla.org/MPL/2.0/>.

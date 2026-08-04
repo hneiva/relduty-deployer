@@ -35,14 +35,19 @@ class VersionProbe(Protocol):
 
 
 class HttpxVersionProbe:
-    """Fetches `/__version__` over HTTP."""
+    """Fetches `/__version__` over HTTP.
 
-    def __init__(self, *, timeout: float = DEFAULT_TIMEOUT) -> None:
+    `transport` exists so tests can serve responses in-process; leaving it unset uses the
+    real network.
+    """
+
+    def __init__(self, *, timeout: float = DEFAULT_TIMEOUT, transport: httpx.AsyncBaseTransport | None = None) -> None:
         self._timeout = timeout
+        self._transport = transport
 
     async def probe(self, url: str) -> DeployedVersion:
         try:
-            async with httpx.AsyncClient(timeout=self._timeout, follow_redirects=True) as client:
+            async with httpx.AsyncClient(timeout=self._timeout, follow_redirects=True, transport=self._transport) as client:
                 response = await client.get(url)
                 response.raise_for_status()
                 payload = response.json()

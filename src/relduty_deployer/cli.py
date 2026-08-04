@@ -31,7 +31,7 @@ def _build(config):
 
 
 @click.group(invoke_without_command=True)
-@click.version_option(__version__)
+@click.version_option(__version__, prog_name="relduty-deployer")
 @click.pass_context
 def main(ctx: click.Context) -> None:
     """Deploy Mozilla Release Engineering projects to staging and production."""

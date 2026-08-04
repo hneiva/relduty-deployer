@@ -16,7 +16,7 @@ from relduty_deployer.config import Config, ConfigStore, build_projects
 from relduty_deployer.gitcmd import GitClient
 from relduty_deployer.models import ActionKind, DeployStatus, Env, StatusKind
 from relduty_deployer.projects import Project
-from relduty_deployer.refresh import EXPECTED_FAILURES, refresh
+from relduty_deployer.refresh import EXPECTED_FAILURES, refresh, strategy_for
 from relduty_deployer.screens import ConfirmDeployScreen, Decision, SettingsScreen
 from relduty_deployer.strategies import Strategy, resolve
 from relduty_deployer.widgets import DeployButton, ProjectRow, SaveButton, row_id
@@ -97,7 +97,13 @@ class RelDutyApp(App[None]):
     async def _do_refresh(self, project: Project) -> None:
         row = self._row(project.name)
         row.set_all(DeployStatus.fetching())
-        result = await refresh(project, resolve(self._strategies, project), self._git)
+        strategy = strategy_for(project, self._strategies)
+        if strategy is None:
+            message = f"unknown strategy {project.spec.strategy!r}"
+            row.set_all(DeployStatus.failed(message))
+            self._log(f"{project.name}: {message}")
+            return
+        result = await refresh(project, strategy, self._git)
         if result.failed:
             row.set_all(DeployStatus.failed(result.error))
             self._log(f"{project.name}: fetch failed: {result.error}")

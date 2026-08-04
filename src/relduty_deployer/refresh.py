@@ -35,6 +35,14 @@ class ProjectStatus:
         return bool(self.error)
 
 
+def strategy_for(project: Project, strategies: Mapping[str, Strategy]) -> Strategy | None:
+    """The project's strategy, or None if it names one that is not registered."""
+    try:
+        return resolve(strategies, project)
+    except StrategyError:
+        return None
+
+
 async def refresh(project: Project, strategy: Strategy, git: GitClient, *, fetch: bool = True) -> ProjectStatus:
     """Fetch the project's remote, then read each environment's status.
 
@@ -64,9 +72,16 @@ async def refresh_all(
     *,
     fetch: bool = True,
 ) -> list[ProjectStatus]:
-    """Refresh every project concurrently, preserving the given order."""
+    """Refresh every project concurrently, preserving the given order.
+
+    A project naming an unregistered strategy is reported as failed rather than aborting the
+    whole run, so one misconfigured entry cannot hide every other project's status.
+    """
 
     async def one(project: Project) -> ProjectStatus:
-        return await refresh(project, resolve(strategies, project), git, fetch=fetch)
+        strategy = strategy_for(project, strategies)
+        if strategy is None:
+            return ProjectStatus(project=project, error=f"unknown strategy {project.spec.strategy!r}")
+        return await refresh(project, strategy, git, fetch=fetch)
 
     return list(await asyncio.gather(*(one(project) for project in projects)))

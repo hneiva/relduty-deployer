@@ -1,0 +1,125 @@
+"""The projects this tool deploys, and how each one is deployed.
+
+Everything here is a fact about the project rather than a preference, so it lives in
+code. Only the machine-local bits — where the checkout is and which remote to push —
+come from the config file.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Mapping
+from dataclasses import dataclass, field
+from pathlib import Path
+
+from relduty_deployer.models import Env
+
+BRANCH_PUSH = "branch_push"
+BALROG = "balrog"
+
+SCRIPTWORKER_STAGING_WARNING = (
+    "RelEng policy: scriptworker staging deploys are normally skipped, because nothing runs "
+    "against them regularly and pushing may interfere with people testing their own changes "
+    "to scriptworkers."
+)
+
+
+@dataclass(frozen=True)
+class ProjectSpec:
+    """How a project is deployed."""
+
+    name: str
+    strategy: str
+    source_branch: str
+    targets: Mapping[Env, str] = field(default_factory=dict)
+    warnings: Mapping[Env, str] = field(default_factory=dict)
+
+    @property
+    def environments(self) -> tuple[Env, ...]:
+        """The environments this project exposes, in display order."""
+        return (Env.STAGING, Env.PROD)
+
+
+@dataclass(frozen=True)
+class ProjectSettings:
+    """Where this machine keeps the project, and which remote deploys it."""
+
+    path: Path
+    remote: str = "origin"
+    enabled: bool = True
+
+
+@dataclass(frozen=True)
+class Project:
+    """A spec paired with the local settings a strategy needs to act on it."""
+
+    spec: ProjectSpec
+    settings: ProjectSettings
+
+    @property
+    def name(self) -> str:
+        return self.spec.name
+
+    def target(self, env: Env) -> str:
+        """The branch that deploys `env`."""
+        try:
+            return self.spec.targets[env]
+        except KeyError:
+            raise KeyError(f"{self.name} has no {env} branch target; its strategy is {self.spec.strategy!r}") from None
+
+    def source_ref(self) -> str:
+        """The remote-tracking ref the deploy ships from."""
+        return f"{self.settings.remote}/{self.spec.source_branch}"
+
+    def target_ref(self, env: Env) -> str:
+        """The remote-tracking ref for `env`'s deploy branch."""
+        return f"{self.settings.remote}/{self.target(env)}"
+
+
+# Source branches genuinely differ between these repos, and a local clone's
+# refs/remotes/origin/HEAD cannot be trusted to name the live one: k8s-autoscale's still
+# points at `master`, which is over a hundred commits behind `main` and is not in that
+# repo's Taskcluster branch gate at all. Every branch below was confirmed against the
+# repo's .taskcluster.yml gate, its README, and the GitHub API.
+PROJECT_SPECS: tuple[ProjectSpec, ...] = (
+    ProjectSpec(
+        name="scriptworker-scripts",
+        strategy=BRANCH_PUSH,
+        source_branch="master",
+        targets={Env.STAGING: "dev", Env.PROD: "production"},
+        warnings={Env.STAGING: SCRIPTWORKER_STAGING_WARNING},
+    ),
+    # Balrog has no deploy branches. It ships by publishing a GitHub release, and its
+    # production promotion happens by hand in ArgoCD, so this tool reports status only.
+    ProjectSpec(
+        name="balrog",
+        strategy=BALROG,
+        source_branch="main",
+    ),
+    ProjectSpec(
+        name="shipit",
+        strategy=BRANCH_PUSH,
+        source_branch="main",
+        targets={Env.STAGING: "dev", Env.PROD: "production"},
+    ),
+    ProjectSpec(
+        name="k8s-autoscale",
+        strategy=BRANCH_PUSH,
+        source_branch="main",
+        targets={Env.STAGING: "dev", Env.PROD: "production"},
+    ),
+    # tooltool stages from `staging`, not `dev`. Its `dev` branch was last touched in 2020
+    # and no longer appears in its branch gate, so pushing it deploys nothing.
+    ProjectSpec(
+        name="tooltool",
+        strategy=BRANCH_PUSH,
+        source_branch="master",
+        targets={Env.STAGING: "staging", Env.PROD: "production"},
+    ),
+)
+
+SPECS_BY_NAME: Mapping[str, ProjectSpec] = {spec.name: spec for spec in PROJECT_SPECS}
+
+
+def default_path(name: str) -> Path:
+    """Where a checkout is assumed to live before the user says otherwise."""
+    return Path.home() / "dev" / name

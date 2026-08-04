@@ -1,0 +1,174 @@
+#body {
+    padding: 0 1;
+}
+
+#toolbar {
+    height: auto;
+    align: right middle;
+    padding: 1 0 0 0;
+}
+
+#config-path {
+    width: 1fr;
+    color: $text-muted;
+}
+
+/* Fixed width so the label flipping between "Save" and "Saved ☑️" cannot shift the
+   layout: the emoji's rendered cell width varies between terminals. */
+#save {
+    width: 14;
+    min-width: 14;
+}
+
+/* Both cell classes are height 1 to match the row; a taller child would be clipped away
+   entirely rather than overflowing visibly. */
+#column-headings {
+    height: 1;
+    margin: 1 0 0 0;
+}
+
+#column-headings .heading-name {
+    width: 24;
+    height: 1;
+    color: $text-muted;
+    text-style: bold;
+}
+
+#column-headings .heading {
+    width: 34;
+    height: 1;
+    content-align: center middle;
+    color: $text-muted;
+    text-style: bold;
+}
+
+.project-row {
+    height: auto;
+    padding: 0 0 1 0;
+}
+
+.project-name {
+    width: 24;
+    content-align: left middle;
+    height: 3;
+    padding: 1 0 0 0;
+}
+
+.deploy {
+    width: 34;
+    min-width: 34;
+}
+
+#rows {
+    height: 1fr;
+}
+
+#output {
+    height: 10;
+    border: round $panel;
+    padding: 0 1;
+}
+
+/* Confirmation dialog */
+
+ConfirmDeployScreen {
+    align: center middle;
+}
+
+.confirm {
+    width: 92;
+    height: auto;
+    max-height: 90%;
+    background: $surface;
+    border: round $primary;
+    padding: 1 2;
+}
+
+.confirm.prod {
+    border: heavy $error;
+}
+
+.confirm-title {
+    text-style: bold;
+    padding: 0 0 1 0;
+}
+
+.confirm.prod .confirm-title {
+    color: $error;
+}
+
+.confirm-warning {
+    background: $warning-muted;
+    padding: 1;
+    margin: 0 0 1 0;
+}
+
+.confirm-body {
+    height: auto;
+    max-height: 28;
+}
+
+.confirm-dry {
+    height: auto;
+    max-height: 10;
+    margin: 1 0 0 0;
+}
+
+.confirm-buttons {
+    height: auto;
+    align: right middle;
+    padding: 1 0 0 0;
+}
+
+.confirm-buttons Button {
+    margin: 0 0 0 2;
+}
+
+/* Settings dialog */
+
+SettingsScreen {
+    align: center middle;
+}
+
+.settings {
+    width: 92;
+    height: auto;
+    max-height: 90%;
+    background: $surface;
+    border: round $primary;
+    padding: 1 2;
+}
+
+.settings-note {
+    color: $text-muted;
+    padding: 0 0 1 0;
+}
+
+.settings-body {
+    height: auto;
+    max-height: 30;
+}
+
+.settings-project {
+    text-style: bold;
+    padding: 1 0 0 0;
+}
+
+.settings-fields {
+    height: auto;
+}
+
+.settings-label {
+    width: 8;
+    content-align: left middle;
+    height: 3;
+    padding: 1 0 0 0;
+}
+
+.settings-input {
+    width: 1fr;
+}
+
+.settings-remote {
+    width: 24;
+}

@@ -78,6 +78,7 @@ class BranchPushStrategy:
             description=f"{remote}  {source_branch} @ {sha[:10]}  →  {target_branch}",
             argv=push_argv(path, remote, sha=sha, target_branch=target_branch, dry_run=False),
             sha=sha,
+            remote_url=await self._git.remote_url(path, remote),
             commits=commits,
             truncated=max(0, status.behind - len(commits)),
             warning=project.spec.warnings.get(env, ""),

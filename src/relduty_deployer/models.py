@@ -192,6 +192,7 @@ class DeployAction:
     argv: tuple[str, ...] = ()
     url: str = ""
     sha: str = ""
+    remote_url: str = ""
     commits: tuple[str, ...] = ()
     truncated: int = 0
     warning: str = ""

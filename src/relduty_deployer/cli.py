@@ -36,7 +36,22 @@ def _build(config):
 def main(ctx: click.Context) -> None:
     """Deploy Mozilla Release Engineering projects to staging and production."""
     if ctx.invoked_subcommand is None:
-        ctx.invoke(status)
+        ctx.invoke(dashboard)
+
+
+@main.command()
+def dashboard() -> None:
+    """Open the deploy dashboard."""
+    from relduty_deployer.app import RelDutyApp
+
+    try:
+        store = ConfigStore()
+        config = store.load()
+    except ConfigError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    git, strategies = _build(config)
+    RelDutyApp(store=store, config=config, strategies=strategies, git=git).run()
 
 
 @main.command()

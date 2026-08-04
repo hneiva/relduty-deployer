@@ -22,16 +22,20 @@ SCRIPTWORKER_STAGING_WARNING = (
     "to scriptworkers."
 )
 
+BALROG_DOCS_URL = "https://mozilla-balrog.readthedocs.io/en/latest/infrastructure.html#deploying-to-stage"
+
 
 @dataclass(frozen=True)
 class ProjectSpec:
     """How a project is deployed."""
 
     name: str
+    github_repo: str
     strategy: str
     source_branch: str
     targets: Mapping[Env, str] = field(default_factory=dict)
     warnings: Mapping[Env, str] = field(default_factory=dict)
+    docs_url: str = ""
 
     @property
     def environments(self) -> tuple[Env, ...]:
@@ -59,6 +63,10 @@ class Project:
     def name(self) -> str:
         return self.spec.name
 
+    @property
+    def github_repo(self) -> str:
+        return self.spec.github_repo
+
     def target(self, env: Env) -> str:
         """The branch that deploys `env`."""
         try:
@@ -67,12 +75,15 @@ class Project:
             raise KeyError(f"{self.name} has no {env} branch target; its strategy is {self.spec.strategy!r}") from None
 
     def source_ref(self) -> str:
-        """The remote-tracking ref the deploy ships from."""
-        return f"{self.settings.remote}/{self.spec.source_branch}"
+        """The remote-tracking ref the deploy ships from.
+
+        Fully qualified, so a local branch or tag of the same name cannot shadow it.
+        """
+        return f"refs/remotes/{self.settings.remote}/{self.spec.source_branch}"
 
     def target_ref(self, env: Env) -> str:
         """The remote-tracking ref for `env`'s deploy branch."""
-        return f"{self.settings.remote}/{self.target(env)}"
+        return f"refs/remotes/{self.settings.remote}/{self.target(env)}"
 
 
 # Source branches genuinely differ between these repos, and a local clone's
@@ -83,6 +94,7 @@ class Project:
 PROJECT_SPECS: tuple[ProjectSpec, ...] = (
     ProjectSpec(
         name="scriptworker-scripts",
+        github_repo="mozilla-releng/scriptworker-scripts",
         strategy=BRANCH_PUSH,
         source_branch="master",
         targets={Env.STAGING: "dev", Env.PROD: "production"},
@@ -92,17 +104,21 @@ PROJECT_SPECS: tuple[ProjectSpec, ...] = (
     # production promotion happens by hand in ArgoCD, so this tool reports status only.
     ProjectSpec(
         name="balrog",
+        github_repo="mozilla-releng/balrog",
         strategy=BALROG,
         source_branch="main",
+        docs_url=BALROG_DOCS_URL,
     ),
     ProjectSpec(
         name="shipit",
+        github_repo="mozilla-releng/shipit",
         strategy=BRANCH_PUSH,
         source_branch="main",
         targets={Env.STAGING: "dev", Env.PROD: "production"},
     ),
     ProjectSpec(
         name="k8s-autoscale",
+        github_repo="mozilla-releng/k8s-autoscale",
         strategy=BRANCH_PUSH,
         source_branch="main",
         targets={Env.STAGING: "dev", Env.PROD: "production"},
@@ -111,6 +127,7 @@ PROJECT_SPECS: tuple[ProjectSpec, ...] = (
     # and no longer appears in its branch gate, so pushing it deploys nothing.
     ProjectSpec(
         name="tooltool",
+        github_repo="mozilla-releng/tooltool",
         strategy=BRANCH_PUSH,
         source_branch="master",
         targets={Env.STAGING: "staging", Env.PROD: "production"},

@@ -69,14 +69,21 @@ def test_scriptworker_staging_carries_the_policy_warning():
     assert Env.PROD not in spec.warnings
 
 
-def test_refs_are_qualified_with_the_configured_remote():
+def test_refs_are_fully_qualified_with_the_configured_remote():
     project = Project(
         spec=SPECS_BY_NAME["tooltool"],
         settings=ProjectSettings(path=Path("/tmp/tooltool"), remote="upstream"),
     )
-    assert project.source_ref() == "upstream/master"
-    assert project.target_ref(Env.STAGING) == "upstream/staging"
-    assert project.target_ref(Env.PROD) == "upstream/production"
+    # refs/remotes/... rather than the shorthand, so a same-named tag cannot shadow it.
+    assert project.source_ref() == "refs/remotes/upstream/master"
+    assert project.target_ref(Env.STAGING) == "refs/remotes/upstream/staging"
+    assert project.target_ref(Env.PROD) == "refs/remotes/upstream/production"
+
+
+def test_every_project_names_its_canonical_github_repo():
+    # Needed to catch a remote that points at a personal fork, where a push deploys nothing.
+    for spec in PROJECT_SPECS:
+        assert spec.github_repo == f"mozilla-releng/{spec.name}"
 
 
 def test_missing_target_fails_loudly():

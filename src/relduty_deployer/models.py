@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import NamedTuple
 
 
 class Env(StrEnum):
@@ -11,6 +12,20 @@ class Env(StrEnum):
 
     STAGING = "staging"
     PROD = "prod"
+
+
+class AheadBehind(NamedTuple):
+    """How a deploy branch diverges from the branch it deploys from.
+
+    Returned as a named tuple rather than a bare pair so that unpacking it in the wrong
+    order is not silently possible: call sites read `counts.behind`, not `counts[1]`.
+    """
+
+    ahead: int
+    """Commits on the deploy branch that the source branch does not have."""
+
+    behind: int
+    """Commits on the source branch that the deploy branch does not have."""
 
 
 class StatusKind(StrEnum):
@@ -22,6 +37,14 @@ class StatusKind(StrEnum):
     DIVERGED = "diverged"
     NOT_IMPLEMENTED = "not_implemented"
     ERROR = "error"
+
+
+class ActionKind(StrEnum):
+    """What pressing an environment's button does."""
+
+    PUSH = "push"
+    OPEN_URL = "open_url"
+    NONE = "none"
 
 
 # Textual Button variants, which map to the -success/-warning/-error CSS classes.
@@ -42,34 +65,40 @@ def _plural(count: int, word: str) -> str:
 
 @dataclass(frozen=True)
 class DeployStatus:
-    """The state of one environment of one project.
-
-    `behind` counts commits on the source branch that the deploy branch is missing —
-    the work a deploy would ship. `ahead` counts commits on the deploy branch that the
-    source branch is missing, which means the branch has diverged and must be resolved
-    by hand.
-    """
+    """The state of one environment of one project."""
 
     kind: StatusKind
     behind: int = 0
     ahead: int = 0
+    action: ActionKind = ActionKind.NONE
     detail: str = ""
+    url: str = ""
     error: str = ""
 
     @classmethod
-    def from_counts(cls, *, behind: int, ahead: int, detail: str = "") -> DeployStatus:
-        """Classify a raw ahead/behind pair.
+    def from_counts(cls, counts: AheadBehind, *, action: ActionKind | None = None, detail: str = "") -> DeployStatus:
+        """Classify divergence counts.
 
-        This is the only place the two counts are turned into a verdict, so callers
-        cannot disagree about which direction blocks a deploy.
+        This is the only place the two counts become a verdict, so callers cannot
+        disagree about which direction blocks a deploy. Any `ahead` at all is unsafe: a
+        push would have to discard those commits.
+
+        `action` overrides the default affordance, which is how balrog reports real
+        commit counts for an environment it deliberately does not automate.
         """
-        if ahead:
-            kind = StatusKind.DIVERGED
-        elif behind:
-            kind = StatusKind.BEHIND
+        if counts.ahead:
+            kind, default_action = StatusKind.DIVERGED, ActionKind.NONE
+        elif counts.behind:
+            kind, default_action = StatusKind.BEHIND, ActionKind.PUSH
         else:
-            kind = StatusKind.UP_TO_DATE
-        return cls(kind=kind, behind=behind, ahead=ahead, detail=detail)
+            kind, default_action = StatusKind.UP_TO_DATE, ActionKind.NONE
+        return cls(
+            kind=kind,
+            behind=counts.behind,
+            ahead=counts.ahead,
+            action=default_action if action is None else action,
+            detail=detail,
+        )
 
     @classmethod
     def fetching(cls) -> DeployStatus:
@@ -79,7 +108,7 @@ class DeployStatus:
     @classmethod
     def failed(cls, message: str) -> DeployStatus:
         """Status shown when the comparison could not be made at all."""
-        return cls(kind=StatusKind.ERROR, error=message)
+        return cls(kind=StatusKind.ERROR, error=message, detail=message)
 
     @classmethod
     def unimplemented(cls, detail: str = "") -> DeployStatus:
@@ -110,7 +139,10 @@ class DeployStatus:
     @property
     def label(self) -> str:
         """The text shown on the environment's button."""
-        if self.detail:
+        if self.kind is StatusKind.UP_TO_DATE and self.detail:
+            # Balrog's up-to-date states carry the version that is live.
+            return f"{self.detail} · Up to date"
+        if self.detail and self.kind in (StatusKind.BEHIND, StatusKind.DIVERGED):
             return f"{self.detail} · {self.summary}"
         if self.kind is StatusKind.BEHIND:
             return f"{_plural(self.behind, 'commit')} behind"
@@ -124,23 +156,20 @@ class DeployStatus:
     @property
     def deployable(self) -> bool:
         """Whether a fast-forward deploy is possible right now."""
-        return self.kind is StatusKind.BEHIND and self.ahead == 0
+        return self.action is ActionKind.PUSH
 
-
-class ActionKind(StrEnum):
-    """What pressing an environment's button will do."""
-
-    PUSH = "push"
-    OPEN_URL = "open_url"
-    NONE = "none"
+    @property
+    def clickable(self) -> bool:
+        """Whether the button does anything at all when pressed."""
+        return self.action is not ActionKind.NONE
 
 
 @dataclass(frozen=True)
 class DeployAction:
     """A fully resolved description of a deploy, built before anything is run.
 
-    The confirmation dialog renders this rather than rebuilding the command, so what
-    the user approves is exactly what executes.
+    The confirmation dialog renders this rather than rebuilding the command, so what the
+    user approves is exactly what executes.
     """
 
     kind: ActionKind
@@ -149,8 +178,9 @@ class DeployAction:
     url: str = ""
     sha: str = ""
     commits: tuple[str, ...] = ()
+    truncated: int = 0
     warning: str = ""
-    blocked_reason: str = ""
+    documented_equivalent: str = ""
 
 
 @dataclass(frozen=True)

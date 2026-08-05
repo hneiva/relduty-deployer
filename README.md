@@ -4,12 +4,13 @@ A terminal dashboard for the Mozilla Release Engineering deploy rotation. It fet
 RelEng project it knows about, shows how far each environment is behind, and performs the
 fast-forward push that deploys it.
 
-RelEng stages deployments every Tuesday and pushes them to production every Thursday.
-Doing that by hand means remembering that five repositories have three different
-source branches and two different names for "staging", and fetching each one before you can
-tell whether there is anything to deploy at all.
+RelEng stages deployments every Tuesday and pushes them to production every Thursday. Doing
+that by hand means remembering that five repositories have three different source branches
+and two different names for "staging", and fetching each one before you can tell whether
+there is anything to deploy at all.
 
 For example:
+
 ```
  project                 staging                             prod
  scriptworker-scripts    15 commits behind                   3 commits behind
@@ -45,7 +46,7 @@ nothing watches, which looks like success and deploys nothing.
 | tooltool | `master` | **`staging`** | `production` | branch push |
 | balrog | `main` | GitHub release | ArgoCD | balrog (status only) |
 
-Note: Only the plain `dev` and `production` branches are offered for scriptworker-scripts. Its
+Only the plain `dev` and `production` branches are offered for scriptworker-scripts. Its
 per-script `dev-<script>` and `production-<script>` branches remain a manual escape hatch.
 
 ## What the colours mean
@@ -62,7 +63,7 @@ per-script `dev-<script>` and `production-<script>` branches remain a manual esc
 
 The tool only ever fast-forwards, and `--force` is never passed on any code path. If a
 deploy branch has commits its source branch does not, the button turns red and cannot be
-pressed - resolving it by hand is the intended resolution.
+pressed — that divergence has to be resolved by hand.
 
 Four independent things have to agree before a push happens: classification marks only a
 pure fast-forward as pushable, the button is disabled otherwise, the status is re-checked
@@ -76,7 +77,7 @@ initial focus so a stray Enter cannot deploy production.
 Two further traps are checked rather than assumed. The remote must point at the canonical
 `mozilla-releng` repository, because a push to a personal fork succeeds and deploys
 nothing. And the push sends a resolved sha rather than a branch name, so what ships is
-exactly what the status was measured from, and not from local refs.
+exactly what the status was measured from rather than whatever a local branch points at.
 
 ### Rolling back
 
@@ -142,6 +143,28 @@ The one test worth knowing about is in `tests/test_gitcmd.py`: it builds a real 
 whose deploy branch is 2 commits behind and 1 commit ahead, and asserts which number is
 which. Transposing ahead and behind would make the tool offer a push at precisely the
 moment it must refuse one, and unequal counts are what make that transposition detectable.
+
+## Screenshots
+
+The dashboard after a refresh. Each row is a project and each cell is an environment, so the
+question the rotation actually asks — is there anything to deploy — is answered by the
+colours before you read a single number. balrog shows versions rather than commit counts
+because it is the one status-only project.
+
+![The deploy dashboard](screenshots/home.png)
+
+Pressing a yellow button opens the confirmation rather than deploying. It lists the commits
+that would ship and both forms of the command: the resolved sha that will actually run, and
+the `main:production` spelling the runbooks use. Those are the same push, and showing both is
+what makes the sha version auditable instead of surprising. Cancel holds the initial focus,
+which is deliberate on a dialog that can deploy production with one key.
+
+![The deploy confirmation for shipit to prod](screenshots/deploy.png)
+
+`c` opens settings: where each clone lives, which remote deploys, and whether to show the
+project.
+
+![The settings screen](screenshots/settings.png)
 
 ## License
 

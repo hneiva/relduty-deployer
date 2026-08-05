@@ -146,20 +146,22 @@ moment it must refuse one, and unequal counts are what make that transposition d
 
 ## Screenshots
 
-The dashboard after a refresh. Each row is a project and each cell is an environment, so the
-question the rotation actually asks — is there anything to deploy — is answered by the
-colours before you read a single number. balrog shows versions rather than commit counts
-because it is the one status-only project.
+The dashboard after a refresh. One row per project, one cell per environment, so the only
+question the rotation asks — is there anything to deploy — is answered by the colours.
+balrog shows versions instead of commit counts, since it is the one project this tool
+reports on rather than deploys.
 
 ![The deploy dashboard](screenshots/home.png)
 
-Pressing a yellow button opens the confirmation rather than deploying. It lists the commits
-that would ship and both forms of the command: the resolved sha that will actually run, and
-the `main:production` spelling the runbooks use. Those are the same push, and showing both is
-what makes the sha version auditable instead of surprising. Cancel holds the initial focus,
-which is deliberate on a dialog that can deploy production with one key.
+Pressing a yellow button asks first. You get the commits that would ship, the command that
+will run, and the branch-name version of it from the runbooks.
 
-![The deploy confirmation for shipit to prod](screenshots/deploy.png)
+![The deploy confirmation for scriptworker-scripts to prod](screenshots/deploy.png)
+
+Click any hash to read that commit — message, changed files, diff — without leaving the
+dialog.
+
+![One commit in full](screenshots/commit_detail.png)
 
 `c` opens settings: where each clone lives, which remote deploys, and whether to show the
 project.

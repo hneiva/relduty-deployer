@@ -48,6 +48,7 @@ class ActionKind(StrEnum):
 
     PUSH = "push"
     OPEN_URL = "open_url"
+    CREATE_PR = "create_pr"
     NONE = "none"
 
 
@@ -176,6 +177,15 @@ class DeployStatus:
     def deployable(self) -> bool:
         """Whether a fast-forward deploy is possible right now."""
         return self.action is ActionKind.PUSH
+
+    @property
+    def actionable(self) -> bool:
+        """Whether pressing this runs something that needs confirming first.
+
+        Wider than `deployable`, which asks the narrower question of whether a push would
+        fast-forward. Opening a URL is deliberately excluded: it needs no approval.
+        """
+        return self.action in (ActionKind.PUSH, ActionKind.CREATE_PR)
 
     @property
     def clickable(self) -> bool:

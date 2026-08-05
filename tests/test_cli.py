@@ -15,10 +15,11 @@ from fakes import CANONICAL_URL, FakeGitClient
 from relduty_deployer import cli as cli_module
 from relduty_deployer.config import SCHEMA_VERSION, ConfigStore
 from relduty_deployer.models import AheadBehind
-from relduty_deployer.projects import PROJECT_SPECS, SPECS_BY_NAME
+from relduty_deployer.projects import BRANCH_PUSH, PROJECT_SPECS, SPECS_BY_NAME
 from relduty_deployer.strategies import BranchPushStrategy
 
-BRANCH_PUSH_PROJECTS = [spec.name for spec in PROJECT_SPECS if spec.name != "balrog"]
+# By strategy, not by excluding balrog: iscript is not a branch-push project either.
+BRANCH_PUSH_PROJECTS = [spec.name for spec in PROJECT_SPECS if spec.strategy == BRANCH_PUSH]
 
 
 class PerPathGit(FakeGitClient):

@@ -36,6 +36,10 @@ class FakeGitClient:
 
     fetched: list[tuple[Path, str, FetchSpec]] = field(default_factory=list)
     pushed: list[tuple[str, str, bool]] = field(default_factory=list)
+    committed: list[tuple[str, str, str]] = field(default_factory=list)
+    """(file, content, message) for each commit built, so tests can assert the exact bytes."""
+
+    built_commit_sha: str = "c" * 40
 
     async def fetch(self, path: Path, remote: str, *, spec: FetchSpec) -> None:
         if self.fetch_error:
@@ -71,6 +75,10 @@ class FakeGitClient:
             return self.commit_details[sha]
         except KeyError:
             raise GitError(f"bad object {sha}") from None
+
+    async def commit_replacing_file(self, path: Path, *, base_ref: str, file: str, content: str, message: str) -> str:
+        self.committed.append((file, content, message))
+        return self.built_commit_sha
 
     async def remote_url(self, path: Path, remote: str) -> str:
         url = self.remote_urls.get(remote, self.default_remote_url)

@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import os
 import shlex
+import tempfile
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -157,6 +158,8 @@ class GitClient(Protocol):
 
     async def show_commit(self, path: Path, sha: str) -> str: ...
 
+    async def commit_replacing_file(self, path: Path, *, base_ref: str, file: str, content: str, message: str) -> str: ...
+
     async def remote_url(self, path: Path, remote: str) -> str: ...
 
     async def push(self, path: Path, remote: str, *, sha: str, target_branch: str, dry_run: bool) -> DeployResult: ...
@@ -186,6 +189,16 @@ class SubprocessGitClient:
     async def _checked(self, argv: Sequence[str], *, timeout: float | None = None) -> str:
         """Run git and return stdout, raising `GitError` if it failed."""
         result = await self._run(argv, timeout=self._timeout if timeout is None else timeout)
+        if not result.ok:
+            raise GitError(f"exit {result.returncode}: {shlex.join(argv)}\n{result.combined}")
+        return result.stdout
+
+    async def _checked_with_env(self, argv: Sequence[str], *, env: Mapping[str, str]) -> str:
+        """As `_checked`, but for the plumbing steps that need GIT_INDEX_FILE set."""
+        try:
+            result = await run(argv, timeout=self._timeout, env=env)
+        except CommandError as exc:
+            raise GitError(str(exc)) from exc
         if not result.ok:
             raise GitError(f"exit {result.returncode}: {shlex.join(argv)}\n{result.combined}")
         return result.stdout
@@ -234,6 +247,33 @@ class SubprocessGitClient:
         anyway when stdout is a pipe, but not if the user has `color.ui = always` set.
         """
         return await self._checked(("git", "-C", str(path), "show", "--no-color", "--stat", "--patch", sha))
+
+    async def commit_replacing_file(self, path: Path, *, base_ref: str, file: str, content: str, message: str) -> str:
+        """Build a commit on top of `base_ref` with one file replaced, and return its sha.
+
+        Plumbing only, so the working tree, the index and HEAD are all left alone. The
+        checkout may be dirty or sitting on an unrelated branch and this still works, which
+        matters because the repository being committed to is one the user works in.
+
+        The tree is assembled through a temporary index named by GIT_INDEX_FILE rather than
+        the repository's own. The new blob does land in the object database, unreferenced
+        until something points at it; git collects it if the push never happens.
+        """
+        parent = (await self._checked(("git", "-C", str(path), "rev-parse", f"{base_ref}^{{commit}}"))).strip()
+
+        with tempfile.TemporaryDirectory() as scratch:
+            blob_source = Path(scratch) / "content"
+            blob_source.write_text(content)
+            blob = (await self._checked(("git", "-C", str(path), "hash-object", "-w", "--path", file, str(blob_source)))).strip()
+
+            env = _child_env()
+            env["GIT_INDEX_FILE"] = str(Path(scratch) / "index")
+            await self._checked_with_env(("git", "-C", str(path), "read-tree", parent), env=env)
+            await self._checked_with_env(("git", "-C", str(path), "update-index", "--add", "--cacheinfo", f"100644,{blob},{file}"), env=env)
+            tree = (await self._checked_with_env(("git", "-C", str(path), "write-tree"), env=env)).strip()
+
+        argv = ("git", "-C", str(path), "commit-tree", tree, "-p", parent, "-m", message)
+        return (await self._checked(argv)).strip()
 
     async def remote_url(self, path: Path, remote: str) -> str:
         """The URL a named remote points at."""

@@ -19,6 +19,16 @@ from relduty_deployer.models import Env
 
 BRANCH_PUSH = "branch_push"
 BALROG = "balrog"
+ISCRIPT = "iscript"
+
+# iscript is deployed out of ronin_puppet, which pins the scriptworker-scripts revision the
+# mac signers run. Bumping that pin is a pull request against ronin_puppet rather than a
+# branch push, so it is the one project whose first column is not an environment.
+ISCRIPT_PINNED_REPO = "mozilla-releng/scriptworker-scripts"
+ISCRIPT_PINNED_BRANCH = "master"
+ISCRIPT_REVISION_FILE = "data/common.yaml"
+ISCRIPT_REVISION_KEY = "scriptworker_scripts_revision"
+ISCRIPT_BUMP_TITLE = "chore(iscript): Bump revision"
 
 SCRIPTWORKER_STAGING_WARNING = (
     "RelEng policy: scriptworker staging deploys are normally skipped, because nothing runs "
@@ -35,6 +45,7 @@ SCRIPTWORKER_DOCS_URL = "https://scriptworker-scripts.readthedocs.io/en/latest/s
 SHIPIT_DOCS_URL = "https://github.com/mozilla-releng/shipit#deployed-environments"
 K8S_AUTOSCALE_DOCS_URL = "https://github.com/mozilla-releng/k8s-autoscale#deployment"
 TOOLTOOL_DOCS_URL = "https://github.com/mozilla-releng/tooltool#deployed-environments"
+ISCRIPT_DOCS_URL = "https://github.com/mozilla-releng/scriptworker-scripts/wiki/Mac-Signers-Maintenance#deploying-scriptworker-updates"
 
 
 @dataclass(frozen=True)
@@ -48,6 +59,13 @@ class ProjectSpec:
     targets: Mapping[Env, str] = field(default_factory=dict)
     warnings: Mapping[Env, str] = field(default_factory=dict)
     docs_url: str = ""
+    checkout_dir: str = ""
+    """Set when the checkout is not named after the project, as iscript lives in ronin_puppet."""
+
+    @property
+    def checkout_name(self) -> str:
+        """The directory the clone is expected to be in, under the configured parent."""
+        return self.checkout_dir or self.name
 
     @property
     def environments(self) -> tuple[Env, ...]:
@@ -137,6 +155,18 @@ PROJECT_SPECS: tuple[ProjectSpec, ...] = (
         source_branch="main",
         targets={Env.STAGING: "dev", Env.PROD: "production"},
         docs_url=K8S_AUTOSCALE_DOCS_URL,
+    ),
+    # iscript has no staging: only production is ever updated. Its first column bumps the
+    # scriptworker-scripts revision that ronin_puppet pins, which is a pull request, and its
+    # production branch is `macos-signer-latest` rather than `production`.
+    ProjectSpec(
+        name="iscript",
+        github_repo="mozilla-platform-ops/ronin_puppet",
+        strategy=ISCRIPT,
+        source_branch="master",
+        targets={Env.PROD: "macos-signer-latest"},
+        docs_url=ISCRIPT_DOCS_URL,
+        checkout_dir="ronin_puppet",
     ),
     # tooltool stages from `staging`, not `dev`. Its `dev` branch was last touched in 2020
     # and no longer appears in its branch gate, so pushing it deploys nothing.

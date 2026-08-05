@@ -21,11 +21,13 @@ from relduty_deployer.strategies.base import (
     WrongRemoteError,
 )
 from relduty_deployer.strategies.branch_push import BranchPushStrategy
+from relduty_deployer.strategies.iscript import IscriptStrategy
 from relduty_deployer.versions import VersionProbe
 
 __all__ = [
     "BalrogStrategy",
     "BranchPushStrategy",
+    "IscriptStrategy",
     "Strategy",
     "StrategyError",
     "UnknownStrategyError",
@@ -43,9 +45,11 @@ def build_strategies(*, git: GitClient, github: GitHubClient, versions: VersionP
     mutable dict registered into at import time: that would make import order
     load-bearing and leave tests unable to substitute fakes.
     """
+    branch_push = BranchPushStrategy(git=git)
     implementations: tuple[Strategy, ...] = (
-        BranchPushStrategy(git=git),
+        branch_push,
         BalrogStrategy(git=git, github=github, versions=versions),
+        IscriptStrategy(git=git, github=github, branch_push=branch_push),
     )
     return MappingProxyType({implementation.name: implementation for implementation in implementations})
 

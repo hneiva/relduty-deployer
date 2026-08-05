@@ -20,17 +20,28 @@ from fakes import CANONICAL_URL, FakeGitClient
 
 from relduty_deployer.app import RelDutyApp
 from relduty_deployer.config import ConfigStore
+from relduty_deployer.github import PullRequest
 from relduty_deployer.models import ActionKind, AheadBehind, DeployAction, DeployResult, DeployStatus, Env, StatusKind
-from relduty_deployer.projects import PROJECT_SPECS, SPECS_BY_NAME, Project, ProjectSettings
+from relduty_deployer.projects import (
+    BRANCH_PUSH,
+    ISCRIPT_BUMP_TITLE,
+    ISCRIPT_REVISION_FILE,
+    ISCRIPT_REVISION_KEY,
+    PROJECT_SPECS,
+    SPECS_BY_NAME,
+    Project,
+    ProjectSettings,
+)
 from relduty_deployer.screens import CommitDetailScreen, ConfirmDeployScreen, SettingsScreen
 from relduty_deployer.screens.confirm_deploy import split_commit
-from relduty_deployer.strategies import BranchPushStrategy
+from relduty_deployer.strategies import BranchPushStrategy, IscriptStrategy
 from relduty_deployer.widgets import DOCS_LABEL, SAVED_LABEL, UNSAVED_LABEL, DeployButton, DocsButton, SaveButton, button_id, docs_id, row_id
 
 TERMINAL = (150, 55)
 # `padding: 0 4` on ConfirmDeployScreen, counted from both sides.
 CONFIRM_GUTTER = 8
-BRANCH_PUSH_PROJECTS = [spec.name for spec in PROJECT_SPECS if spec.name != "balrog"]
+# By strategy, not by excluding balrog: iscript is not a branch-push project either.
+BRANCH_PUSH_PROJECTS = [spec.name for spec in PROJECT_SPECS if spec.strategy == BRANCH_PUSH]
 BALROG_URL = "https://mozilla-balrog.readthedocs.io/en/latest/infrastructure.html#deploying-to-stage"
 
 
@@ -71,6 +82,27 @@ class StubBalrogStrategy:
         raise AssertionError("balrog must never be pushed")
 
 
+PINNED_REVISION = "b87f6cef82c69545f77cc0cc6dd38fda86ebb3d1"
+LATEST_REVISION = "3a91c4d0000000000000000000000000000000ff"
+
+
+@dataclasses.dataclass
+class StubGitHubClient:
+    """Answers the two questions iscript's first column asks, with no network."""
+
+    latest: str = LATEST_REVISION
+    open_prs: dict = dataclasses.field(default_factory=dict)
+
+    async def branch_head(self, repo: str, branch: str) -> str:
+        return self.latest
+
+    async def open_pull_request(self, repo: str, title: str):
+        return self.open_prs.get(title)
+
+    async def create_pull_request(self, repo: str, *, head: str, base: str, title: str):
+        raise AssertionError("the dashboard tests must not open a pull request")
+
+
 class PerPathGit(FakeGitClient):
     """Scopes answers by checkout path, the way real git does.
 
@@ -87,6 +119,11 @@ class PerPathGit(FakeGitClient):
         self.by_project = by_project
 
     async def remote_url(self, path: Path, remote: str) -> str:
+        """Whatever a canonical clone would report, which is not always mozilla-releng: iscript
+        deploys out of mozilla-platform-ops/ronin_puppet."""
+        spec = SPECS_BY_NAME.get(path.name)
+        if spec is not None:
+            return f"git@github.com:{spec.github_repo}.git"
         return CANONICAL_URL.format(repo=path.name)
 
     async def ahead_behind(self, path: Path, *, target_ref: str, source_ref: str) -> AheadBehind:
@@ -110,21 +147,28 @@ def build_app(tmp_path, counts=None, *, opener=None, enabled=None):
         )
     store.save(config)
 
-    by_project, shas = {}, {}
-    for name in BRANCH_PUSH_PROJECTS:
-        spec = SPECS_BY_NAME[name]
+    by_project, shas, files = {}, {}, {}
+    # Every project with branch targets, which is all of them except balrog. iscript is
+    # included because its production half is an ordinary push, even though its first
+    # column is not.
+    for spec in PROJECT_SPECS:
+        if not spec.targets:
+            continue
         source = f"refs/remotes/origin/{spec.source_branch}"
         shas[source] = "a" * 40
-        by_project[name] = {}
+        by_project[spec.name] = {}
         for env, branch in spec.targets.items():
             target = f"refs/remotes/origin/{branch}"
             shas[target] = "b" * 40
-            by_project[name][(target, source)] = (counts or {}).get(name, {}).get(env, AheadBehind(ahead=0, behind=0))
+            by_project[spec.name][(target, source)] = (counts or {}).get(spec.name, {}).get(env, AheadBehind(ahead=0, behind=0))
+        if spec.name == "iscript":
+            files[(source, ISCRIPT_REVISION_FILE)] = f'        {ISCRIPT_REVISION_KEY}: "{PINNED_REVISION}"\n'
 
-    git = PerPathGit(by_project=by_project, shas=shas)
+    git = PerPathGit(by_project=by_project, shas=shas, files=files)
     strategies = {
         BranchPushStrategy.name: BranchPushStrategy(git=git),
         StubBalrogStrategy.name: StubBalrogStrategy(),
+        IscriptStrategy.name: IscriptStrategy(git=git, github=StubGitHubClient()),
     }
     app = RelDutyApp(
         store=store,
@@ -657,6 +701,82 @@ async def test_disabled_projects_are_hidden(tmp_path):
         assert app.query_one(f"#{row_id('shipit')}").display is False
 
 
+async def test_iscripts_first_column_bumps_the_revision_rather_than_staging(tmp_path):
+    """iscript has no staging, so that slot reports the pinned revision instead."""
+    app, *_ = build_app(tmp_path)
+
+    async with app.run_test(size=TERMINAL) as pilot:
+        await pilot.pause()
+        bump = app.query_one(f"#{button_id('iscript', Env.STAGING)}", DeployButton)
+
+        assert str(bump.label) == "bump available"
+        assert bump.status.action is ActionKind.CREATE_PR
+        assert bump.disabled is False
+        assert PINNED_REVISION[:10] in bump.tooltip and LATEST_REVISION[:10] in bump.tooltip
+
+
+async def test_bumping_the_revision_asks_before_opening_a_pr(tmp_path):
+    """A pull request is a side effect, so it goes through the same confirmation a push does."""
+    app, git, *_ = build_app(tmp_path)
+
+    async with app.run_test(size=TERMINAL) as pilot:
+        await pilot.pause()
+        await open_confirm(pilot, app, "iscript", Env.STAGING)
+
+        assert isinstance(app.screen, ConfirmDeployScreen)
+        rendered = " ".join(str(node.render()) for node in app.screen.query(".confirm-facts"))
+        assert PINNED_REVISION[:10] in rendered and LATEST_REVISION[:10] in rendered
+        assert git.committed == [], "nothing is written until the dialog is confirmed"
+        assert git.pushed == []
+
+
+async def test_cancelling_a_bump_writes_nothing(tmp_path):
+    app, git, *_ = build_app(tmp_path)
+
+    async with app.run_test(size=TERMINAL) as pilot:
+        await pilot.pause()
+        await open_confirm(pilot, app, "iscript", Env.STAGING)
+        await pilot.press("escape")
+        await pilot.pause()
+
+        assert git.committed == []
+        assert git.pushed == []
+
+
+async def test_an_up_to_date_revision_is_green_and_inert(tmp_path):
+    app, *_ = build_app(tmp_path)
+    for strategy in app._strategies.values():
+        if isinstance(strategy, IscriptStrategy):
+            strategy._github.latest = PINNED_REVISION
+
+    async with app.run_test(size=TERMINAL) as pilot:
+        await pilot.pause()
+        bump = app.query_one(f"#{button_id('iscript', Env.STAGING)}", DeployButton)
+
+        assert str(bump.label) == "Up to date"
+        assert bump.disabled is True
+
+
+async def test_an_open_bump_pr_is_offered_instead_of_a_new_one(tmp_path):
+    opener = RecordingOpener()
+    app, git, *_ = build_app(tmp_path, opener=opener)
+    pull = PullRequest(number=1502, url="https://github.com/mozilla-platform-ops/ronin_puppet/pull/1502", title=ISCRIPT_BUMP_TITLE)
+    for strategy in app._strategies.values():
+        if isinstance(strategy, IscriptStrategy):
+            strategy._github.open_prs[ISCRIPT_BUMP_TITLE] = pull
+
+    async with app.run_test(size=TERMINAL) as pilot:
+        await pilot.pause()
+        bump = app.query_one(f"#{button_id('iscript', Env.STAGING)}", DeployButton)
+        assert str(bump.label) == "PR #1502 open"
+
+        await pilot.click(f"#{button_id('iscript', Env.STAGING)}")
+        await pilot.pause()
+
+        assert opener.opened == [pull.url], "the open PR is offered rather than a competing one"
+        assert git.committed == []
+
+
 async def test_every_project_row_has_a_docs_button(tmp_path):
     app, *_ = build_app(tmp_path)
 
@@ -774,7 +894,7 @@ async def test_a_branch_that_diverges_while_the_dialog_is_open_is_not_pushed(tmp
         assert app.is_running
 
 
-@pytest.mark.parametrize("name", BRANCH_PUSH_PROJECTS)
+@pytest.mark.parametrize("name", [spec.name for spec in PROJECT_SPECS])
 async def test_no_project_ends_up_in_an_error_state(tmp_path, name):
     app, *_ = build_app(tmp_path)
 

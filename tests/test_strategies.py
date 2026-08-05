@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from fakes import FakeGitClient
 
-from relduty_deployer.projects import BALROG, BRANCH_PUSH, PROJECT_SPECS, SPECS_BY_NAME, Project, ProjectSettings, ProjectSpec
+from relduty_deployer.projects import BALROG, BRANCH_PUSH, ISCRIPT, PROJECT_SPECS, SPECS_BY_NAME, Project, ProjectSettings, ProjectSpec
 from relduty_deployer.strategies import UnknownStrategyError, build_strategies, resolve
 
 
@@ -18,7 +18,7 @@ def make_registry():
 
 
 def test_the_registry_holds_exactly_the_declared_strategies():
-    assert set(make_registry()) == {BRANCH_PUSH, BALROG}
+    assert set(make_registry()) == {BRANCH_PUSH, BALROG, ISCRIPT}
 
 
 def test_every_project_resolves_to_a_strategy():

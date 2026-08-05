@@ -75,7 +75,7 @@ class Config:
 
 def default_config() -> Config:
     """Settings for a machine that has never run this tool."""
-    return Config(projects={spec.name: ProjectSettings(path=default_path(spec.name)) for spec in PROJECT_SPECS})
+    return Config(projects={spec.name: ProjectSettings(path=default_path(spec.checkout_name)) for spec in PROJECT_SPECS})
 
 
 def build_projects(config: Config) -> tuple[Project, ...]:
@@ -145,11 +145,11 @@ class ConfigStore:
             if entry is None:
                 if fill_missing:
                     self.notes.append(f"{spec.name} was missing from {self.path}; using defaults")
-                    projects[spec.name] = ProjectSettings(path=default_path(spec.name))
+                    projects[spec.name] = ProjectSettings(path=default_path(spec.checkout_name))
                 continue
             if not isinstance(entry, dict):
                 raise ConfigError(f"{self.path}: project {spec.name!r} should be a JSON object")
-            raw_path = entry.get("path") or str(default_path(spec.name))
+            raw_path = entry.get("path") or str(default_path(spec.checkout_name))
             projects[spec.name] = ProjectSettings(
                 path=Path(str(raw_path)).expanduser(),
                 remote=str(entry.get("remote") or "origin"),

@@ -45,6 +45,7 @@ EXPECTED_DOCS = {
     "shipit": "github.com/mozilla-releng/shipit",
     "k8s-autoscale": "github.com/mozilla-releng/k8s-autoscale",
     "tooltool": "github.com/mozilla-releng/tooltool",
+    "iscript": "scriptworker-scripts/wiki/Mac-Signers-Maintenance",
 }
 
 
@@ -75,17 +76,19 @@ def test_balrog_is_status_only():
     assert spec.targets == {}
 
 
-def test_only_balrog_has_a_custom_strategy():
+def test_the_custom_strategies_are_balrog_and_iscript():
+    """Both are custom because neither deploys by pushing a branch to an environment."""
     custom = [spec.name for spec in PROJECT_SPECS if spec.strategy != BRANCH_PUSH]
-    assert custom == ["balrog"]
+    assert custom == ["balrog", "iscript"]
 
 
-def test_all_five_projects_are_registered():
+def test_all_the_projects_are_registered_in_display_order():
     assert [spec.name for spec in PROJECT_SPECS] == [
         "scriptworker-scripts",
         "balrog",
         "shipit",
         "k8s-autoscale",
+        "iscript",
         "tooltool",
     ]
 
@@ -109,8 +112,18 @@ def test_refs_are_fully_qualified_with_the_configured_remote():
 
 def test_every_project_names_its_canonical_github_repo():
     # Needed to catch a remote that points at a personal fork, where a push deploys nothing.
+    # iscript is the exception twice over: it deploys out of ronin_puppet, which lives under
+    # mozilla-platform-ops rather than mozilla-releng.
     for spec in PROJECT_SPECS:
+        if spec.name == "iscript":
+            assert spec.github_repo == "mozilla-platform-ops/ronin_puppet"
+            continue
         assert spec.github_repo == f"mozilla-releng/{spec.name}"
+
+
+def test_only_iscript_keeps_its_checkout_under_another_name():
+    named_differently = {spec.name: spec.checkout_name for spec in PROJECT_SPECS if spec.checkout_name != spec.name}
+    assert named_differently == {"iscript": "ronin_puppet"}
 
 
 def test_missing_target_fails_loudly():

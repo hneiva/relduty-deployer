@@ -147,7 +147,8 @@ class RelDutyApp(App[None]):
             self._log(f"{button.project.name} {button.env}: opening {status.url}")
             self._opener(status.url)
             return
-        if status.action is ActionKind.PUSH:
+        # PUSH and CREATE_PR both go through confirmation before anything happens.
+        if status.actionable:
             self._start_deploy(button.project, button.env)
 
     def _start_deploy(self, project: Project, env: Env) -> None:
@@ -168,7 +169,7 @@ class RelDutyApp(App[None]):
             # The button label may be minutes old; re-check before offering to push.
             status = await strategy.status(project, env)
             row.set_status(env, status)
-            if not status.deployable:
+            if not status.actionable:
                 self._log(f"{project.name} {env}: not deploying, it is now {status.label}")
                 self.notify(f"{project.name} {env} is {status.label}", severity="warning")
                 return

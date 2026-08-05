@@ -39,6 +39,29 @@ def test_branch_push_matrix(name, expected):
     assert spec.targets[Env.PROD] == prod
 
 
+EXPECTED_DOCS = {
+    "scriptworker-scripts": "scriptworker-scripts.readthedocs.io",
+    "balrog": "mozilla-balrog.readthedocs.io",
+    "shipit": "github.com/mozilla-releng/shipit",
+    "k8s-autoscale": "github.com/mozilla-releng/k8s-autoscale",
+    "tooltool": "github.com/mozilla-releng/tooltool",
+}
+
+
+@pytest.mark.parametrize(("name", "host"), EXPECTED_DOCS.items())
+def test_every_project_documents_its_deploy(name, host):
+    """A docs button with no URL is a dead button, so every project must carry one."""
+    url = SPECS_BY_NAME[name].docs_url
+    assert url.startswith("https://"), f"{name} docs URL is not https"
+    assert host in url, f"{name} docs URL does not point at {host}"
+
+
+def test_the_docs_urls_are_deep_links_not_front_pages():
+    """The rotation wants the deploy section, which is the whole point of recording these."""
+    for name, url in ((spec.name, spec.docs_url) for spec in PROJECT_SPECS):
+        assert "#" in url or url.endswith(".html"), f"{name} docs URL is not deep-linked: {url}"
+
+
 def test_tooltool_stages_from_staging_not_dev():
     # tooltool's `dev` branch is a 2020 leftover that is no longer in its branch gate,
     # so pushing it would look successful and deploy nothing.

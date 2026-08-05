@@ -28,6 +28,14 @@ SCRIPTWORKER_STAGING_WARNING = (
 
 BALROG_DOCS_URL = "https://mozilla-balrog.readthedocs.io/en/latest/infrastructure.html"
 
+# Each project documents its own deploy procedure somewhere different. These are the pages
+# the rotation actually needs, deep-linked to the deploy section rather than the project's
+# front page.
+SCRIPTWORKER_DOCS_URL = "https://scriptworker-scripts.readthedocs.io/en/latest/scriptworkers-FAQ.html#how-do-i-deploy-changes-to-a-specific-scriptworker-script"
+SHIPIT_DOCS_URL = "https://github.com/mozilla-releng/shipit#deployed-environments"
+K8S_AUTOSCALE_DOCS_URL = "https://github.com/mozilla-releng/k8s-autoscale#deployment"
+TOOLTOOL_DOCS_URL = "https://github.com/mozilla-releng/tooltool#deployed-environments"
+
 
 @dataclass(frozen=True)
 class ProjectSpec:
@@ -103,6 +111,7 @@ PROJECT_SPECS: tuple[ProjectSpec, ...] = (
         source_branch="master",
         targets={Env.STAGING: "dev", Env.PROD: "production"},
         warnings={Env.STAGING: SCRIPTWORKER_STAGING_WARNING},
+        docs_url=SCRIPTWORKER_DOCS_URL,
     ),
     # Balrog has no deploy branches. It ships by publishing a GitHub release, and its
     # production promotion happens by hand in ArgoCD, so this tool reports status only.
@@ -119,6 +128,7 @@ PROJECT_SPECS: tuple[ProjectSpec, ...] = (
         strategy=BRANCH_PUSH,
         source_branch="main",
         targets={Env.STAGING: "dev", Env.PROD: "production"},
+        docs_url=SHIPIT_DOCS_URL,
     ),
     ProjectSpec(
         name="k8s-autoscale",
@@ -126,6 +136,7 @@ PROJECT_SPECS: tuple[ProjectSpec, ...] = (
         strategy=BRANCH_PUSH,
         source_branch="main",
         targets={Env.STAGING: "dev", Env.PROD: "production"},
+        docs_url=K8S_AUTOSCALE_DOCS_URL,
     ),
     # tooltool stages from `staging`, not `dev`. Its `dev` branch was last touched in 2020
     # and no longer appears in its branch gate, so pushing it deploys nothing.
@@ -135,6 +146,7 @@ PROJECT_SPECS: tuple[ProjectSpec, ...] = (
         strategy=BRANCH_PUSH,
         source_branch="master",
         targets={Env.STAGING: "staging", Env.PROD: "production"},
+        docs_url=TOOLTOOL_DOCS_URL,
     ),
 )
 

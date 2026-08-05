@@ -59,6 +59,16 @@
     min-width: 34;
 }
 
+/* Fixed width for the same reason as #save: the emoji's rendered cell width varies between
+   terminals, and a row that changes width would break the column alignment. Narrow, because
+   this column decides the dashboard's minimum width — at 7 wide with a 2-column margin the
+   rows no longer fit a 100-column terminal. */
+.docs {
+    width: 5;
+    min-width: 5;
+    margin: 0 0 0 1;
+}
+
 #rows {
     height: 1fr;
 }

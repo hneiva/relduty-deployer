@@ -7,8 +7,9 @@
 These check wiring — that a status reaches the right button, that a diverged environment
 cannot be pressed, that Save reflects dirt. The logic itself is tested elsewhere.
 
-The terminal size matters: a project name plus two 34-column buttons needs more than the
-default 80 columns, and a click on a widget that is off-screen silently does nothing.
+The terminal size matters: a project name, two 34-column buttons and the docs button need
+100 columns, well past the default 80, and a click on a widget that is off-screen silently
+does nothing.
 """
 
 import dataclasses
@@ -20,11 +21,11 @@ from fakes import CANONICAL_URL, FakeGitClient
 from relduty_deployer.app import RelDutyApp
 from relduty_deployer.config import ConfigStore
 from relduty_deployer.models import ActionKind, AheadBehind, DeployAction, DeployResult, DeployStatus, Env, StatusKind
-from relduty_deployer.projects import PROJECT_SPECS, SPECS_BY_NAME
+from relduty_deployer.projects import PROJECT_SPECS, SPECS_BY_NAME, Project, ProjectSettings
 from relduty_deployer.screens import CommitDetailScreen, ConfirmDeployScreen, SettingsScreen
 from relduty_deployer.screens.confirm_deploy import split_commit
 from relduty_deployer.strategies import BranchPushStrategy
-from relduty_deployer.widgets import SAVED_LABEL, UNSAVED_LABEL, DeployButton, SaveButton, button_id, row_id
+from relduty_deployer.widgets import DOCS_LABEL, SAVED_LABEL, UNSAVED_LABEL, DeployButton, DocsButton, SaveButton, button_id, docs_id, row_id
 
 TERMINAL = (150, 55)
 # `padding: 0 4` on ConfirmDeployScreen, counted from both sides.
@@ -654,6 +655,57 @@ async def test_disabled_projects_are_hidden(tmp_path):
         await pilot.pause()
         assert app.query_one(f"#{row_id('tooltool')}").display is True
         assert app.query_one(f"#{row_id('shipit')}").display is False
+
+
+async def test_every_project_row_has_a_docs_button(tmp_path):
+    app, *_ = build_app(tmp_path)
+
+    async with app.run_test(size=TERMINAL) as pilot:
+        await pilot.pause()
+        buttons = app.query(DocsButton)
+        assert len(buttons) == len(PROJECT_SPECS)
+        assert {str(button.label) for button in buttons} == {DOCS_LABEL}
+        assert not any(button.disabled for button in buttons), "every project has a docs URL, so none should be dead"
+
+
+@pytest.mark.parametrize("name", [spec.name for spec in PROJECT_SPECS])
+async def test_the_docs_button_opens_that_projects_documentation(tmp_path, name):
+    """Per project, because one shared URL would be worse than no button at all."""
+    opener = RecordingOpener()
+    app, git, *_ = build_app(tmp_path, opener=opener)
+
+    async with app.run_test(size=TERMINAL) as pilot:
+        await pilot.pause()
+        await pilot.click(f"#{docs_id(name)}")
+        await pilot.pause()
+
+        assert opener.opened == [SPECS_BY_NAME[name].docs_url]
+        assert git.pushed == [], "reading the docs must not deploy anything"
+
+
+@pytest.mark.parametrize("width", [150, 120, 100])
+async def test_the_docs_button_sits_to_the_right_and_still_fits(tmp_path, width):
+    """100 columns is the floor this column sets, so it is the narrowest case checked."""
+    app, *_ = build_app(tmp_path)
+
+    async with app.run_test(size=(width, 55)) as pilot:
+        await pilot.pause()
+        prod = app.query_one(f"#{button_id('shipit', Env.PROD)}").region
+        docs = app.query_one(f"#{docs_id('shipit')}").region
+
+        assert docs.x >= prod.x + prod.width
+        assert docs.width > 0 and docs.x + docs.width <= width, f"the docs button is clipped at {width} columns"
+
+
+def test_a_docs_button_without_a_url_is_disabled():
+    """Disabled rather than absent, so an undocumented project cannot skew the columns."""
+    spec = dataclasses.replace(SPECS_BY_NAME["tooltool"], docs_url="")
+    project = Project(spec=spec, settings=ProjectSettings(path=Path("/nonexistent")))
+
+    button = DocsButton(project)
+
+    assert button.disabled is True
+    assert "tooltool" in str(button.tooltip)
 
 
 async def test_the_settings_screen_opens(tmp_path):

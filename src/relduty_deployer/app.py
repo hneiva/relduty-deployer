@@ -23,7 +23,7 @@ from relduty_deployer.projects import Project
 from relduty_deployer.refresh import EXPECTED_FAILURES, refresh, strategy_for
 from relduty_deployer.screens import ConfirmDeployScreen, Decision, SettingsScreen
 from relduty_deployer.strategies import Strategy, resolve
-from relduty_deployer.widgets import DeployButton, ProjectRow, SaveButton, row_id
+from relduty_deployer.widgets import DeployButton, DocsButton, ProjectRow, SaveButton, row_id
 
 
 class RelDutyApp(App[None]):
@@ -123,6 +123,18 @@ class RelDutyApp(App[None]):
             self._log(f"worker {event.worker.name or event.worker.group} failed: {event.worker.error}")
 
     # Deploying ----------------------------------------------------------------
+
+    @on(Button.Pressed, ".docs")
+    def _on_docs_pressed(self, event: Button.Pressed) -> None:
+        event.stop()
+        button = event.button
+        if not isinstance(button, DocsButton):
+            return
+        url = button.project.spec.docs_url
+        if not url:
+            return
+        self._log(f"{button.project.name}: opening {url}")
+        self._opener(url)
 
     @on(Button.Pressed, ".deploy")
     def _on_deploy_pressed(self, event: Button.Pressed) -> None:

@@ -71,12 +71,16 @@
 
 /* Confirmation dialog */
 
+/* The gutter lives on the screen rather than the dialog so that the dialog can simply ask
+   for all the width it is allowed: 100% resolves against the screen's content region,
+   which is the terminal minus this padding. */
 ConfirmDeployScreen {
     align: center middle;
+    padding: 0 4;
 }
 
 .confirm {
-    width: 92;
+    width: 100%;
     height: auto;
     max-height: 90%;
     background: $surface;

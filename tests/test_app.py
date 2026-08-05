@@ -26,6 +26,8 @@ from relduty_deployer.strategies import BranchPushStrategy
 from relduty_deployer.widgets import SAVED_LABEL, UNSAVED_LABEL, DeployButton, SaveButton, button_id, row_id
 
 TERMINAL = (150, 55)
+# `padding: 0 4` on ConfirmDeployScreen, counted from both sides.
+CONFIRM_GUTTER = 8
 BRANCH_PUSH_PROJECTS = [spec.name for spec in PROJECT_SPECS if spec.name != "balrog"]
 BALROG_URL = "https://mozilla-balrog.readthedocs.io/en/latest/infrastructure.html#deploying-to-stage"
 
@@ -280,6 +282,25 @@ async def test_the_dialog_shows_the_command_and_the_documented_equivalent(tmp_pa
         rendered = " ".join(str(node.render()) for node in app.screen.query(".confirm-commands"))
         assert f"{'a' * 40}:refs/heads/staging" in rendered
         assert "git push origin master:staging" in rendered
+
+
+@pytest.mark.parametrize("width", [80, 100, 150, 220])
+async def test_the_confirmation_follows_the_terminal_width(tmp_path, width):
+    """The dialog tracks the window rather than sitting at a fixed width.
+
+    Several widths are checked because a hardcoded size passes at exactly one of them, and
+    the failure it hides is a dialog wider than the terminal, which clips the commands the
+    dialog exists to show. `outer_size` is the assertion because `size` is the content
+    region, which is narrower again by the dialog's own border and padding.
+    """
+    app, *_ = build_app(tmp_path, {"tooltool": {Env.STAGING: AheadBehind(ahead=0, behind=4)}})
+
+    async with app.run_test(size=(width, 55)) as pilot:
+        await pilot.pause()
+        await open_confirm(pilot, app, "tooltool", Env.STAGING)
+
+        dialog = app.screen.query_one(".confirm")
+        assert dialog.outer_size.width == width - CONFIRM_GUTTER
 
 
 async def test_balrog_opens_the_runbook_instead_of_pushing(tmp_path):

@@ -155,6 +155,8 @@ class GitClient(Protocol):
 
     async def commit_list(self, path: Path, *, target_ref: str, source_ref: str, limit: int) -> tuple[str, ...]: ...
 
+    async def show_commit(self, path: Path, sha: str) -> str: ...
+
     async def remote_url(self, path: Path, remote: str) -> str: ...
 
     async def push(self, path: Path, remote: str, *, sha: str, target_branch: str, dry_run: bool) -> DeployResult: ...
@@ -224,6 +226,14 @@ class SubprocessGitClient:
         raw = await self._checked(commit_list_argv(path, target_ref=target_ref, source_ref=source_ref, limit=limit))
         lines = tuple(line for line in raw.splitlines() if line.strip())
         return lines[:limit]
+
+    async def show_commit(self, path: Path, sha: str) -> str:
+        """One commit in full: message, changed files, and diff.
+
+        `--no-color` because the output is rendered as plain text; git would omit colour
+        anyway when stdout is a pipe, but not if the user has `color.ui = always` set.
+        """
+        return await self._checked(("git", "-C", str(path), "show", "--no-color", "--stat", "--patch", sha))
 
     async def remote_url(self, path: Path, remote: str) -> str:
         """The URL a named remote points at."""

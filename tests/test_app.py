@@ -21,7 +21,8 @@ from relduty_deployer.app import RelDutyApp
 from relduty_deployer.config import ConfigStore
 from relduty_deployer.models import ActionKind, AheadBehind, DeployAction, DeployResult, DeployStatus, Env, StatusKind
 from relduty_deployer.projects import PROJECT_SPECS, SPECS_BY_NAME
-from relduty_deployer.screens import ConfirmDeployScreen, SettingsScreen
+from relduty_deployer.screens import CommitDetailScreen, ConfirmDeployScreen, SettingsScreen
+from relduty_deployer.screens.confirm_deploy import split_commit
 from relduty_deployer.strategies import BranchPushStrategy
 from relduty_deployer.widgets import SAVED_LABEL, UNSAVED_LABEL, DeployButton, SaveButton, button_id, row_id
 
@@ -284,11 +285,254 @@ async def test_the_dialog_shows_the_command_and_the_documented_equivalent(tmp_pa
         assert "git push origin master:staging" in rendered
 
 
+SHA_COLUMN = 3
+"""A commit line is indented two spaces, so column 3 is inside the sha and column 20 is not."""
+
+
+async def test_a_rule_separates_the_commits_from_the_commands(tmp_path):
+    """Positions, not just presence: a divider in the wrong place separates the wrong things."""
+    app, git, *_ = build_app(tmp_path, {"tooltool": {Env.STAGING: AheadBehind(ahead=0, behind=2)}}, enabled={"tooltool"})
+    give_tooltool_commits(git, "09efe5e Convert MUI system props", "cee301f Switch PR policy")
+
+    async with app.run_test(size=TERMINAL) as pilot:
+        await pilot.pause()
+        await open_confirm(pilot, app, "tooltool", Env.STAGING)
+
+        rule = app.screen.query_one(".confirm-footer Rule")
+        last_commit = app.screen.query(".confirm-commit").last()
+        commands = app.screen.query_one(".confirm-commands")
+
+        assert last_commit.region.y < rule.region.y < commands.region.y
+        assert str(commands.render()).startswith("will run"), "the Rule's margin replaces the old leading blank line"
+
+
+def give_tooltool_commits(git, *entries):
+    """Set the exact commit lines the staging dialog will render."""
+    spec = SPECS_BY_NAME["tooltool"]
+    key = (f"refs/remotes/origin/{spec.targets[Env.STAGING]}", f"refs/remotes/origin/{spec.source_branch}")
+    git.commits[key] = entries
+
+
+async def open_commit_details(pilot, app, column=SHA_COLUMN, index=0):
+    """Click a commit line at a given column and settle.
+
+    Scrolls the line into view first, because on a short terminal the commit list is only a
+    few rows tall and a click on an off-screen widget silently does nothing.
+    """
+    target = app.screen.query(".confirm-commit")[index]
+    target.scroll_visible(animate=False)
+    await pilot.pause()
+    await pilot.click(target, offset=(column, 0))
+    await pilot.pause()
+    await pilot.pause()
+
+
+async def test_clicking_a_commit_hash_opens_its_details(tmp_path):
+    app, git, *_ = build_app(tmp_path, {"tooltool": {Env.STAGING: AheadBehind(ahead=0, behind=1)}}, enabled={"tooltool"})
+    give_tooltool_commits(git, "09efe5e Convert MUI system props")
+    git.commit_details["09efe5e"] = "commit 09efe5e\n\n    Convert MUI system props\n\n thing.py | 2 +-\n"
+
+    async with app.run_test(size=TERMINAL) as pilot:
+        await pilot.pause()
+        await open_confirm(pilot, app, "tooltool", Env.STAGING)
+        await open_commit_details(pilot, app)
+
+        assert isinstance(app.screen, CommitDetailScreen)
+        assert "thing.py | 2 +-" in str(app.screen.query_one("#commit-body").render())
+
+
+async def test_clicking_a_commit_subject_opens_nothing(tmp_path):
+    """Only the sha is a link, which is what the underline is promising."""
+    app, git, *_ = build_app(tmp_path, {"tooltool": {Env.STAGING: AheadBehind(ahead=0, behind=1)}}, enabled={"tooltool"})
+    give_tooltool_commits(git, "09efe5e Convert MUI system props")
+    git.commit_details["09efe5e"] = "details"
+
+    async with app.run_test(size=TERMINAL) as pilot:
+        await pilot.pause()
+        await open_confirm(pilot, app, "tooltool", Env.STAGING)
+        await open_commit_details(pilot, app, column=20)
+
+        assert isinstance(app.screen, ConfirmDeployScreen)
+
+
+async def test_closing_the_details_returns_to_the_confirmation(tmp_path):
+    """The details screen is pushed on top, so closing it must not cancel the deploy."""
+    app, git, *_ = build_app(tmp_path, {"tooltool": {Env.STAGING: AheadBehind(ahead=0, behind=1)}}, enabled={"tooltool"})
+    give_tooltool_commits(git, "09efe5e Convert MUI system props")
+    git.commit_details["09efe5e"] = "details"
+
+    async with app.run_test(size=TERMINAL) as pilot:
+        await pilot.pause()
+        await open_confirm(pilot, app, "tooltool", Env.STAGING)
+        await open_commit_details(pilot, app)
+        await pilot.press("escape")
+        await pilot.pause()
+
+        assert isinstance(app.screen, ConfirmDeployScreen)
+        assert git.pushed == []
+
+
+async def test_a_commit_git_cannot_show_reports_the_error_in_the_screen(tmp_path):
+    """A stale sha must land in the screen rather than taking the app down."""
+    app, git, *_ = build_app(tmp_path, {"tooltool": {Env.STAGING: AheadBehind(ahead=0, behind=1)}}, enabled={"tooltool"})
+    give_tooltool_commits(git, "09efe5e Convert MUI system props")
+
+    async with app.run_test(size=TERMINAL) as pilot:
+        await pilot.pause()
+        await open_confirm(pilot, app, "tooltool", Env.STAGING)
+        await open_commit_details(pilot, app)
+
+        assert isinstance(app.screen, CommitDetailScreen)
+        assert "could not read 09efe5e" in str(app.screen.query_one("#commit-body").render())
+
+
+async def test_a_subject_containing_markup_is_not_parsed_as_markup(tmp_path):
+    """The sha is interpolated into the click action, so the subject must go in as a variable."""
+    app, git, *_ = build_app(tmp_path, {"tooltool": {Env.STAGING: AheadBehind(ahead=0, behind=1)}}, enabled={"tooltool"})
+    give_tooltool_commits(git, "09efe5e [skip ci] bump [bold]version[/bold]")
+
+    async with app.run_test(size=TERMINAL) as pilot:
+        await pilot.pause()
+        await open_confirm(pilot, app, "tooltool", Env.STAGING)
+
+        rendered = str(app.screen.query_one(".confirm-commit").render())
+        assert "[skip ci] bump [bold]version[/bold]" in rendered
+
+
+async def test_a_line_without_a_sha_is_rendered_but_not_linked(tmp_path):
+    app, git, *_ = build_app(tmp_path, {"tooltool": {Env.STAGING: AheadBehind(ahead=0, behind=1)}}, enabled={"tooltool"})
+    give_tooltool_commits(git, "not-a-sha a line git would never emit")
+
+    async with app.run_test(size=TERMINAL) as pilot:
+        await pilot.pause()
+        await open_confirm(pilot, app, "tooltool", Env.STAGING)
+        assert "not-a-sha a line git would never emit" in str(app.screen.query_one(".confirm-commit").render())
+
+        await open_commit_details(pilot, app)
+        assert isinstance(app.screen, ConfirmDeployScreen)
+
+
+@pytest.mark.parametrize("height", [55, 40, 30, 24])
+async def test_a_long_diff_cannot_hide_the_close_button(tmp_path, height):
+    """The third modal inherits the docked buttons and the `1fr` body, and a diff is the
+    longest thing any of them renders."""
+    app, git, *_ = build_app(tmp_path, {"tooltool": {Env.STAGING: AheadBehind(ahead=0, behind=1)}}, enabled={"tooltool"})
+    give_tooltool_commits(git, "09efe5e Convert MUI system props")
+    git.commit_details["09efe5e"] = "commit 09efe5e\n\n    subject\n\n" + "\n".join(f"+line {i}" for i in range(200))
+
+    async with app.run_test(size=(150, height)) as pilot:
+        await pilot.pause()
+        await open_confirm(pilot, app, "tooltool", Env.STAGING)
+        await open_commit_details(pilot, app)
+
+        for selector in ("#close", ".commit-detail-body"):
+            region = app.screen.query_one(selector).region
+            assert region.height > 0, f"{selector} has no height at {height} rows"
+            assert region.y >= 0, f"{selector} starts above the terminal at {height} rows"
+            assert region.y + region.height <= height, f"{selector} runs past the bottom at {height} rows"
+
+
+@pytest.mark.parametrize(
+    ("entry", "expected"),
+    [
+        ("09efe5e Convert MUI system props", ("09efe5e", "Convert MUI system props")),
+        ("09efe5ef9ac812b3a3b5fcf5b21bec6db3651eba full sha", ("09efe5ef9ac812b3a3b5fcf5b21bec6db3651eba", "full sha")),
+        ("deadbeef", ("deadbeef", "")),
+        ("not-a-sha subject", ("", "not-a-sha subject")),
+        ("09e no subject and too short", ("", "09e no subject and too short")),
+        ("", ("", "")),
+    ],
+)
+def test_split_commit(entry, expected):
+    assert split_commit(entry) == expected
+
+
 def give_tooltool_a_long_commit_list(git, count=20):
     """Fill the staging commit list, so the dialog has more to show than a short terminal fits."""
     spec = SPECS_BY_NAME["tooltool"]
     key = (f"refs/remotes/origin/{spec.targets[Env.STAGING]}", f"refs/remotes/origin/{spec.source_branch}")
     git.commits[key] = tuple(f"{i:07x} Commit subject number {i}, about as long as a real one" for i in range(count))
+
+
+@pytest.mark.parametrize("height", [55, 40, 36, 30, 26, 24, 20])
+async def test_the_command_is_visible_without_scrolling(tmp_path, height):
+    """The command about to run must be on screen the moment the dialog opens.
+
+    It used to live inside the scrolling body, where twenty commits pushed it out of view.
+    Nothing scrolls it back: Cancel holds the focus for safety, so the keyboard did nothing
+    and only a mouse wheel over the body could reach it.
+    """
+    app, git, *_ = build_app(tmp_path, {"tooltool": {Env.STAGING: AheadBehind(ahead=0, behind=40)}}, enabled={"tooltool"})
+    give_tooltool_a_long_commit_list(git)
+
+    async with app.run_test(size=(150, height)) as pilot:
+        await pilot.pause()
+        await open_confirm(pilot, app, "tooltool", Env.STAGING)
+
+        commands = app.screen.query_one(".confirm-commands")
+        assert str(commands.render()).startswith("will run")
+        region = commands.region
+        assert region.height > 0, f"the command has no height at {height} rows"
+        assert region.y >= 0 and region.y + region.height <= height, f"the command is off screen at {height} rows"
+
+
+@pytest.mark.parametrize("height", [55, 45, 36, 30, 24])
+async def test_no_modal_draws_its_body_under_its_footer(tmp_path, height):
+    """A scrolling body must stop where the docked footer starts.
+
+    The earlier fix asserted only that the footer was on screen, which it was — sitting on
+    top of the last rows of the body. Those rows could not be scrolled into view or clicked,
+    so the content was hidden just as thoroughly as the buttons had been.
+    """
+    app, git, *_ = build_app(tmp_path, {"tooltool": {Env.STAGING: AheadBehind(ahead=0, behind=40)}}, enabled={"tooltool"})
+    give_tooltool_a_long_commit_list(git)
+    git.commit_details["0000000"] = "\n".join(f"+line {i}" for i in range(200))
+
+    async with app.run_test(size=(150, height)) as pilot:
+        await pilot.pause()
+        await pilot.press("c")
+        await pilot.pause()
+        assert_body_stops_at(app.screen, ".settings-body", ".confirm-buttons", height)
+        await pilot.press("escape")
+        await pilot.pause()
+
+        await open_confirm(pilot, app, "tooltool", Env.STAGING)
+        assert_body_stops_at(app.screen, ".confirm-body", ".confirm-footer", height)
+
+        app.screen.action_show_commit("0000000")
+        await pilot.pause()
+        await pilot.pause()
+        assert_body_stops_at(app.screen, ".commit-detail-body", ".confirm-buttons", height)
+
+
+def assert_body_stops_at(screen, body_selector, footer_selector, height):
+    body = screen.query_one(body_selector).region
+    footer = screen.query_one(footer_selector).region
+    assert body.height > 0, f"{body_selector} collapsed at {height} rows"
+    assert body.y + body.height <= footer.y, f"{body_selector} runs {body.y + body.height - footer.y} rows under {footer_selector} at {height} rows"
+
+
+@pytest.mark.parametrize("key", ["pagedown", "end"])
+async def test_the_commit_list_scrolls_by_keyboard_while_cancel_keeps_focus(tmp_path, key):
+    """Paging is bound on the screen because no focusable widget in the dialog scrolls.
+
+    Cancel must keep the focus throughout — moving it to the scroll container to make the
+    keys work would put Enter back on a deploy button.
+    """
+    app, git, *_ = build_app(tmp_path, {"tooltool": {Env.STAGING: AheadBehind(ahead=0, behind=40)}}, enabled={"tooltool"})
+    give_tooltool_a_long_commit_list(git)
+
+    async with app.run_test(size=(150, 30)) as pilot:
+        await pilot.pause()
+        await open_confirm(pilot, app, "tooltool", Env.STAGING)
+        body = app.screen.query_one(".confirm-body")
+        assert body.max_scroll_y > 0, "the list has to overflow for this to prove anything"
+
+        await pilot.press(key)
+        await pilot.pause()
+
+        assert body.scroll_offset.y > 0
+        assert app.focused is not None and app.focused.id == "cancel"
 
 
 @pytest.mark.parametrize("height", [55, 40, 36, 30, 24])

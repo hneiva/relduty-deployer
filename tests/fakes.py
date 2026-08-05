@@ -27,6 +27,7 @@ class FakeGitClient:
     shas: dict[str, str] = field(default_factory=dict)
     files: dict[tuple[str, str], str] = field(default_factory=dict)
     commits: dict[tuple[str, str], tuple[str, ...]] = field(default_factory=dict)
+    commit_details: dict[str, str] = field(default_factory=dict)
     known_objects: set[str] = field(default_factory=set)
     remote_urls: dict[str, str] = field(default_factory=dict)
     default_remote_url: str = ""
@@ -64,6 +65,12 @@ class FakeGitClient:
 
     async def commit_list(self, path: Path, *, target_ref: str, source_ref: str, limit: int) -> tuple[str, ...]:
         return self.commits.get((target_ref, source_ref), ())[:limit]
+
+    async def show_commit(self, path: Path, sha: str) -> str:
+        try:
+            return self.commit_details[sha]
+        except KeyError:
+            raise GitError(f"bad object {sha}") from None
 
     async def remote_url(self, path: Path, remote: str) -> str:
         url = self.remote_urls.get(remote, self.default_remote_url)

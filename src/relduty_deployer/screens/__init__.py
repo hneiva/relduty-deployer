@@ -6,12 +6,15 @@
 
 from __future__ import annotations
 
+from relduty_deployer.screens.commit_detail import CommitDetailScreen, ShowCommit
 from relduty_deployer.screens.confirm_deploy import ConfirmDeployScreen, Decision, DryRun
 from relduty_deployer.screens.settings import SettingsScreen
 
 __all__ = [
+    "CommitDetailScreen",
     "ConfirmDeployScreen",
     "Decision",
     "DryRun",
     "SettingsScreen",
+    "ShowCommit",
 ]

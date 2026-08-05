@@ -107,9 +107,24 @@ ConfirmDeployScreen {
     margin: 0 0 1 0;
 }
 
+/* Every modal's scrolling region is `1fr`, never `auto` with a `1fr` cap. Under `auto` the
+   region asks for its content height and the cap under-reserves once `max-height: 90%`
+   clamps the dialog, so the docked footer is drawn over the last rows of the content —
+   between two and five of them, depending on the screen. Those rows were unreachable: not
+   scrollable into view, and not clickable. `1fr` divides the space that is actually left,
+   which costs a dialog that no longer shrinks to short content. */
 .confirm-body {
-    height: auto;
-    max-height: 1fr;
+    height: 1fr;
+}
+
+/* The sha in each commit line is an action link. Underlining it is the only affordance
+   that it can be clicked, since a terminal has no cursor to change shape. */
+.confirm-commit {
+    link-color: $accent;
+    link-style: underline;
+    link-background-hover: $accent;
+    link-color-hover: $text;
+    link-style-hover: underline;
 }
 
 .confirm-dry {
@@ -118,12 +133,21 @@ ConfirmDeployScreen {
     margin: 1 0 0 0;
 }
 
-/* Both modals dock their buttons, and both cap their scrolling body at `1fr`. The two rules
-   are needed together. Docking reserves the buttons' rows before the body is measured, so a
-   long body can never push them past the bottom edge. Capping the body at the space left
-   over is what keeps its own content scrollable: with a constant cap the body claimed its
-   full height inside a shorter dialog, and the overflow was clipped rather than reachable by
-   scrolling. Getting only one of the two hides the buttons, or hides the content. */
+/* Docked as one unit so the body's `1fr` reserves the whole footer, not just the buttons.
+   The button row inside it must not dock again, or it would leave the footer's flow and
+   stop contributing its rows to the reservation. */
+.confirm-footer {
+    dock: bottom;
+    height: auto;
+}
+
+.confirm-footer .confirm-buttons {
+    dock: none;
+}
+
+/* All three modals dock this row, which is what stops a long body pushing the buttons past
+   the bottom edge of a short terminal. It pairs with the `1fr` bodies above: docking alone
+   hides the content under the buttons, and `1fr` alone lets the buttons be pushed away. */
 .confirm-buttons {
     dock: bottom;
     height: auto;
@@ -133,6 +157,27 @@ ConfirmDeployScreen {
 
 .confirm-buttons Button {
     margin: 0 0 0 2;
+}
+
+/* Commit detail */
+
+CommitDetailScreen {
+    align: center middle;
+    padding: 0 4;
+}
+
+.commit-detail {
+    width: 100%;
+    height: auto;
+    max-height: 90%;
+    background: $surface;
+    border: round $primary;
+    padding: 1 2;
+}
+
+/* `1fr`, not `auto`: see the note on .confirm-body. */
+.commit-detail-body {
+    height: 1fr;
 }
 
 /* Settings dialog */
@@ -155,9 +200,9 @@ SettingsScreen {
     padding: 0 0 1 0;
 }
 
+/* `1fr`, not `auto`: see the note on .confirm-body. */
 .settings-body {
-    height: auto;
-    max-height: 1fr;
+    height: 1fr;
 }
 
 .settings-project {

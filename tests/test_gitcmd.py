@@ -170,6 +170,25 @@ async def test_show_file_reads_from_the_ref_not_the_working_tree(diverged_repo):
     assert content.strip() == "from working tree"
 
 
+async def test_show_commit_returns_the_message_the_stat_and_the_patch(diverged_repo):
+    """Abbreviated, because the dialog only ever has the short sha from `log --oneline`."""
+    (diverged_repo / "thing.txt").write_text("hello\n")
+    _git(diverged_repo, "add", "thing.txt")
+    _git(diverged_repo, "commit", "-q", "-m", "add thing")
+    sha = await SubprocessGitClient().rev_parse(diverged_repo, "HEAD")
+
+    details = await SubprocessGitClient().show_commit(diverged_repo, sha[:7])
+
+    assert "add thing" in details
+    assert "thing.txt" in details, "--stat should name the changed file"
+    assert "+hello" in details, "--patch should carry the added line"
+
+
+async def test_show_commit_rejects_an_object_that_is_not_there(diverged_repo):
+    with pytest.raises(GitError):
+        await SubprocessGitClient().show_commit(diverged_repo, "0" * 40)
+
+
 async def test_a_missing_repository_fails_loudly(tmp_path):
     with pytest.raises(GitError):
         await SubprocessGitClient().rev_parse(tmp_path / "nope", "HEAD")

@@ -169,7 +169,12 @@ class RelDutyApp(App[None]):
         async def dry_run():
             return await strategy.execute(project, env, action, dry_run=True)
 
-        decision = await self.push_screen_wait(ConfirmDeployScreen(project=project, env=env, action=action, status=status, dry_run=dry_run))
+        async def show_commit(sha: str) -> str:
+            return await self._git.show_commit(project.settings.path, sha)
+
+        decision = await self.push_screen_wait(
+            ConfirmDeployScreen(project=project, env=env, action=action, status=status, dry_run=dry_run, show_commit=show_commit)
+        )
         if decision is not Decision.PUSH:
             self._log(f"{project.name} {env}: cancelled")
             return

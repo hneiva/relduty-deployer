@@ -5,9 +5,9 @@ RelEng project it knows about, shows how far each environment is behind, and per
 fast-forward push that deploys it.
 
 RelEng stages deployments every Tuesday and pushes them to production every Thursday. Doing
-that by hand means remembering that five repositories have three different source branches
-and two different names for "staging", and fetching each one before you can tell whether
-there is anything to deploy at all.
+that by hand means remembering that six repositories have three different source branches,
+two different names for "staging" and one project with no staging at all, and fetching each
+one before you can tell whether there is anything to deploy.
 
 For example:
 
@@ -17,6 +17,7 @@ For example:
  balrog                  v3.121 unreleased · 2 behind        3.120 · Up to date
  shipit                  2 commits behind                    2 commits behind
  k8s-autoscale           1 commit behind                     1 commit behind
+ iscript                 bump available                      12 commits behind
  tooltool                4 commits behind                    4 commits behind
 ```
 
@@ -45,9 +46,13 @@ nothing watches, which looks like success and deploys nothing.
 | k8s-autoscale | `main` | `dev` | `production` | branch push |
 | tooltool | `master` | **`staging`** | `production` | branch push |
 | balrog | `main` | GitHub release | ArgoCD | balrog (status only) |
+| iscript | `master` | revision bump | **`macos-signer-latest`** | iscript |
 
 Only the plain `dev` and `production` branches are offered for scriptworker-scripts. Its
 per-script `dev-<script>` and `production-<script>` branches remain a manual escape hatch.
+
+iscript is the odd one: it deploys out of `mozilla-platform-ops/ronin_puppet`, so its clone
+defaults to `~/dev/ronin_puppet` rather than a directory named after the project.
 
 ## What the colours mean
 
@@ -58,6 +63,8 @@ per-script `dev-<script>` and `production-<script>` branches remain a manual esc
 | red `N behind, M ahead` | the deploy branch has commits the source branch lacks | nothing |
 | red `M ahead` | same, with nothing to deploy | nothing |
 | grey `n/a` | the state could not be determined | nothing |
+| yellow `bump available` | iscript pins an older revision | opens the confirmation |
+| yellow `PR #N open` | that bump is already waiting for review | opens the PR |
 
 ## Safety
 
@@ -73,6 +80,10 @@ push is not forced so git itself rejects a non-fast-forward.
 The confirmation dialog shows the resolved commit sha, the commits being shipped, the
 remote's URL, and the exact command. It offers a repeatable dry run, and Cancel holds the
 initial focus so a stray Enter cannot deploy production.
+
+iscript's revision bump is the one button that writes rather than pushes, and it never
+writes to your clone: the commit is assembled and pushed straight to a branch, so a dirty
+ronin_puppet checkout on some half-finished branch is left exactly as you left it.
 
 Two further traps are checked rather than assumed. The remote must point at the canonical
 `mozilla-releng` repository, because a push to a personal fork succeeds and deploys
@@ -104,6 +115,21 @@ same version as stage, read from the public Dockerflow endpoints
 Staging showing yellow is usually correct rather than a bug: the documented flow bumps the
 version immediately after each release, so the steady state genuinely is "the version on
 `main` has not been released yet".
+
+## iscript
+
+iscript is not deployed from a repository of its own. The mac signers run whatever
+scriptworker-scripts revision `ronin_puppet` pins, so there are two separate things to do,
+and the first column does the first of them.
+
+`bump available` means the pin is behind scriptworker-scripts `master`. Pressing it opens a
+pull request against ronin_puppet that moves the pin forward and nothing else — one line,
+titled `chore(iscript): Bump revision`. Once that PR exists the button says `PR #N open` and
+takes you to it, so a second click cannot open a competing one. Nothing is written until you
+confirm, and `Dry run` will tell you what it would do without pushing anything.
+
+The prod button is an ordinary deploy, onto `macos-signer-latest` instead of a branch called
+`production`. Landing a bump does not deploy it — that is what the prod button is for.
 
 ## Configuration
 

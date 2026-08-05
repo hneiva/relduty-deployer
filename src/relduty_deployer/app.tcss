@@ -109,7 +109,7 @@ ConfirmDeployScreen {
 
 .confirm-body {
     height: auto;
-    max-height: 28;
+    max-height: 1fr;
 }
 
 .confirm-dry {
@@ -118,7 +118,14 @@ ConfirmDeployScreen {
     margin: 1 0 0 0;
 }
 
+/* Both modals dock their buttons, and both cap their scrolling body at `1fr`. The two rules
+   are needed together. Docking reserves the buttons' rows before the body is measured, so a
+   long body can never push them past the bottom edge. Capping the body at the space left
+   over is what keeps its own content scrollable: with a constant cap the body claimed its
+   full height inside a shorter dialog, and the overflow was clipped rather than reachable by
+   scrolling. Getting only one of the two hides the buttons, or hides the content. */
 .confirm-buttons {
+    dock: bottom;
     height: auto;
     align: right middle;
     padding: 1 0 0 0;
@@ -150,7 +157,7 @@ SettingsScreen {
 
 .settings-body {
     height: auto;
-    max-height: 30;
+    max-height: 1fr;
 }
 
 .settings-project {

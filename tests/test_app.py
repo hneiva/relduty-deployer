@@ -284,6 +284,36 @@ async def test_the_dialog_shows_the_command_and_the_documented_equivalent(tmp_pa
         assert "git push origin master:staging" in rendered
 
 
+def give_tooltool_a_long_commit_list(git, count=20):
+    """Fill the staging commit list, so the dialog has more to show than a short terminal fits."""
+    spec = SPECS_BY_NAME["tooltool"]
+    key = (f"refs/remotes/origin/{spec.targets[Env.STAGING]}", f"refs/remotes/origin/{spec.source_branch}")
+    git.commits[key] = tuple(f"{i:07x} Commit subject number {i}, about as long as a real one" for i in range(count))
+
+
+@pytest.mark.parametrize("height", [55, 40, 36, 30, 24])
+async def test_a_long_commit_list_cannot_hide_the_buttons(tmp_path, height):
+    """The buttons stay on screen and the commit list stays reachable at any terminal height.
+
+    Both halves matter. The buttons are docked, so a long list cannot push Push off the
+    bottom edge; the body is capped at the space left over, so its overflow scrolls instead
+    of being clipped. Fixing only the first hides the list, and only the second hides the
+    buttons — which was the original bug, unrecoverable without resizing the terminal.
+    """
+    app, git, *_ = build_app(tmp_path, {"tooltool": {Env.STAGING: AheadBehind(ahead=0, behind=40)}}, enabled={"tooltool"})
+    give_tooltool_a_long_commit_list(git)
+
+    async with app.run_test(size=(150, height)) as pilot:
+        await pilot.pause()
+        await open_confirm(pilot, app, "tooltool", Env.STAGING)
+
+        for selector in ("#cancel", "#dry-run", "#push", ".confirm-body"):
+            region = app.screen.query_one(selector).region
+            assert region.height > 0, f"{selector} has no height at {height} rows"
+            assert region.y >= 0, f"{selector} starts above the terminal at {height} rows"
+            assert region.y + region.height <= height, f"{selector} runs past the bottom at {height} rows"
+
+
 @pytest.mark.parametrize("width", [80, 100, 150, 220])
 async def test_the_confirmation_follows_the_terminal_width(tmp_path, width):
     """The dialog tracks the window rather than sitting at a fixed width.
@@ -391,6 +421,27 @@ async def test_the_settings_screen_opens(tmp_path):
         await pilot.pause()
 
         assert isinstance(app.screen, SettingsScreen)
+
+
+@pytest.mark.parametrize("height", [55, 40, 36, 30, 24])
+async def test_the_settings_project_list_cannot_hide_close(tmp_path, height):
+    """Settings had the same defect as the confirmation, for the same reason.
+
+    Its body is one path and remote row per project, so it outgrows a short terminal without
+    any unusual state — every project being configured is enough.
+    """
+    app, *_ = build_app(tmp_path)
+
+    async with app.run_test(size=(150, height)) as pilot:
+        await pilot.pause()
+        await pilot.press("c")
+        await pilot.pause()
+
+        for selector in ("#close", ".settings-body"):
+            region = app.screen.query_one(selector).region
+            assert region.height > 0, f"{selector} has no height at {height} rows"
+            assert region.y >= 0, f"{selector} starts above the terminal at {height} rows"
+            assert region.y + region.height <= height, f"{selector} runs past the bottom at {height} rows"
 
 
 async def test_a_push_rejected_by_git_is_reported_not_raised(tmp_path):
